@@ -68,6 +68,7 @@ import es.msaezo.iptv.data.Movie
 import es.msaezo.iptv.data.Show
 import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.data.TmdbItem
+import es.msaezo.iptv.data.titleFor
 
 /** Per screen: the card that last had the focus, and where each row was scrolled to. */
 class FocusMemory {
@@ -210,8 +211,9 @@ fun PosterCard(
 
 @Composable
 fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onClick: () -> Unit) {
+    val title = remember(meta, movie.id) { meta?.titleFor(movie.id.substringBeforeLast('|')) ?: movie.title }
     PosterCard(
-        title = movie.title,
+        title = title,
         subtitle = movie.year?.toString(),
         image = meta?.posterUrl ?: movie.poster,
         vote = meta?.vote ?: movie.rating ?: 0.0,
@@ -224,8 +226,9 @@ fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onCli
 
 @Composable
 fun ShowCard(show: Show, meta: TmdbItem?, width: Dp?, onClick: () -> Unit) {
+    val title = remember(meta, show.id) { meta?.titleFor(show.id.removePrefix("x:")) ?: show.name }
     PosterCard(
-        title = show.name,
+        title = title,
         subtitle = if (show.episodes.isEmpty()) (show.year?.toString() ?: "Series")
         else "${show.seasons.size} season${if (show.seasons.size == 1) "" else "s"} · ${show.episodes.size} ep",
         image = meta?.posterUrl ?: show.poster,

@@ -21,8 +21,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import es.msaezo.iptv.R
 
-/** TUTV brand red (our own shade). Used sparingly: logo, progress, the selected-tab mark. */
-val Brand = Color(0xFFE8384F)
+/** TUTV green, taken from the logo. Used sparingly: progress, the "now" line, the selected-tab mark. */
+val Brand = Color(0xFF10A56D)
 val Bg = Color(0xFF0A0A0A)
 /** Secondary text: light grey that stays readable on the black background (about 9:1). */
 val Muted = Color(0xFFB8B8B8)

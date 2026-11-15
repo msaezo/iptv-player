@@ -53,6 +53,9 @@ import coil.compose.AsyncImage
 import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.R
 import es.msaezo.iptv.data.LibraryView
+import es.msaezo.iptv.data.LiveChannel
+import es.msaezo.iptv.data.NowNext
+import androidx.compose.ui.unit.Dp
 import es.msaezo.iptv.data.Movie
 import es.msaezo.iptv.data.ResolvedCollection
 import es.msaezo.iptv.data.Show
@@ -161,6 +164,17 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
         }.filter { it.second.size >= 4 }
     }
 
+    // "On now": what your favourite (or most recent) channels are showing.
+    val recentLive by app.store.recentLive.collectAsState()
+    val wantsLive = recentLive.isNotEmpty() || favorites.any { it.startsWith("l:") }
+    val liveGuide = if (wantsLive) rememberLiveGuide(view) else null
+    val nowNext by app.epg.guide.collectAsState()
+    val myChannels = remember(liveGuide, favorites, recentLive) {
+        val g = liveGuide ?: return@remember emptyList()
+        val favs = g.channels.filter { ch -> "l:${ch.id}" in favorites || ch.versions.any { "l:${it.url}" in favorites } }
+        (favs + recentLive.mapNotNull { g.channelOf(it) }).distinct().take(14)
+    }
+
     val pad = if (wide) 48.dp else 12.dp
     val landW = if (wide) 270.dp else 190.dp
     val portW = if (wide) 140.dp else 106.dp
@@ -180,6 +194,11 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                         known[r.show.id]?.vote ?: r.show.rating ?: 0.0, r.progress, landW,
                     ) { nav.open(Route.ShowDetail(r.show.id)) }
                 }
+            }
+        }
+        if (myChannels.isNotEmpty()) item {
+            PosterRow("On now · your channels", myChannels, pad) { ch ->
+                OnNowCard(ch, nowNext[ch.id], landW) { Actions.playLive(context, myChannels, myChannels.indexOf(ch)) }
             }
         }
         if (favMovies.isNotEmpty() || favShows.isNotEmpty()) item {
@@ -259,6 +278,41 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                 onSeeAll = if (cat.items.size > 20) ({ nav.openList(cat.name + " series", cat.items) }) else null, seeAllWidth = portW,
             ) { s ->
                 ShowCard(s, known[s.id], portW) { nav.open(Route.ShowDetail(s.id)) }
+            }
+        }
+    }
+}
+
+/** A channel with what it is showing right now and until when. */
+@Composable
+private fun OnNowCard(ch: LiveChannel, guide: NowNext?, width: Dp, onClick: () -> Unit) {
+    LaunchedEffect(ch.id) { IptvApp.instance.epg.request(ch) }
+    Row(
+        Modifier
+            .width(width)
+            .height(84.dp)
+            .focusMemory("now|${ch.id}")
+            .tvClickable(Square, 1.05f, onClick)
+            .background(Color(0xFF181818))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(width = 64.dp, height = 44.dp).background(Color(0xFF262626)), contentAlignment = Alignment.Center) {
+            if (ch.logo != null) {
+                AsyncImage(ch.logo, ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+            val now = guide?.now
+            Text(
+                now?.title ?: guide?.next?.let { "${hhmm(it.start)}  ${it.title}" } ?: "Live",
+                maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color(0xFFD0D0D0),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (now != null) {
+                Text("until ${hhmm(now.end)}", color = Color(0xFF8A8A8A), style = MaterialTheme.typography.labelSmall)
             }
         }
     }

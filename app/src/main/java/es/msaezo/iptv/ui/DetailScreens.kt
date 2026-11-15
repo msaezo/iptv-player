@@ -65,6 +65,7 @@ import es.msaezo.iptv.data.LibraryView
 import es.msaezo.iptv.data.Entry
 import es.msaezo.iptv.data.MetaDetails
 import es.msaezo.iptv.data.Movie
+import es.msaezo.iptv.data.titleFor
 import es.msaezo.iptv.data.Show
 import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.player.PlayerActivity
@@ -201,7 +202,8 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            movie.title, fontWeight = FontWeight.Bold, color = Color.White,
+                            meta?.titleFor(movie.id.substringBeforeLast('|')) ?: movie.title,
+                            fontWeight = FontWeight.Bold, color = Color.White,
                             style = (if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall)
                                 .copy(shadow = TitleShadow),
                         )
@@ -350,7 +352,8 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            show.name, fontWeight = FontWeight.Bold, color = Color.White,
+                            meta?.titleFor(show.id.removePrefix("x:")) ?: show.name,
+                            fontWeight = FontWeight.Bold, color = Color.White,
                             style = (if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall)
                                 .copy(shadow = TitleShadow),
                         )

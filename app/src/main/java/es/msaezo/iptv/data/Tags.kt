@@ -77,8 +77,12 @@ object Tags {
         var ascii = true
         for (c in s) if (c.code >= 128) { ascii = false; break }
         return if (ascii) s.uppercase()
-        else Normalizer.normalize(s, Normalizer.Form.NFD).replace(marks, "").uppercase()
+        // NFKD also turns the small raised letters some providers use ("ᵁᴴᴰ", "ᶠᴴᴰ") into plain ones.
+        else Normalizer.normalize(s, Normalizer.Form.NFKD).replace(marks, "").uppercase()
     }
+
+    /** Upper-case, accent-free, plain-letter form of [s]. */
+    fun plain(s: String): String = fold(s)
 
     /** Upper-case, accent-free words made of letters, digits and '+'. */
     fun tokens(s: String): List<String> {
@@ -181,7 +185,8 @@ object Tags {
 
     private val bracketRegex = Regex("""[\[(]([^\])]{1,20})[\])]""")
     private val prefixRegex = Regex("""^\s*\|?\s*([A-Za-z0-9+]{2,10})\s*(?:[|:]\s*|[-–]\s+)""")
-    private val prefixPipeRegex = Regex("""^\s*\|([A-Za-z]{2,5})\|""")
+    // "|ES|", "| UK |", and compound tags such as "|ES-P|" or "|UK 4K|"
+    private val prefixPipeRegex = Regex("""^\s*\|\s*([A-Za-z]{2,5})(?:[-\s][A-Za-z0-9+]{1,4})?\s*\|\s*""")
     private val trailingTagRegex = Regex("""[\s\-_.]([A-Za-z]{2,10})\s*$""")
     private val spaces = Regex("\\s+")
     private val underscoreTag = Regex("""_([A-Za-z0-9]{2,8})\s*$""")

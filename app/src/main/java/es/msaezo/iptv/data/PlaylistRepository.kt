@@ -107,6 +107,39 @@ class PlaylistRepository(
         }
     }
 
+    @Volatile private var liveRefreshedAt = 0L
+    private var liveJob: Job? = null
+
+    /**
+     * Re-reads only the live channels when they are more than [LIVE_REFRESH_MS] old, behind
+     * the catalogue on screen. Event channels are renamed by the provider through the day.
+     */
+    fun refreshLiveIfStale() {
+        val snap = current ?: return
+        val acc = account ?: return
+        if (_state.value !is State.Ready || job?.isActive == true || liveJob?.isActive == true) return
+        if (System.currentTimeMillis() - liveRefreshedAt < LIVE_REFRESH_MS) return
+        liveJob = scope.launch(worker) {
+            try {
+                val old = HashMap<String, Entry>()
+                for (e in snap.entries) if (e.type == ContentType.LIVE) old[e.url] = e
+                val live = xtream.loadLive(acc, old)
+                if (live.isEmpty() || current !== snap) return@launch
+                val changed = live.size != old.size || live.any { old[it.url] !== it }
+                liveRefreshedAt = System.currentTimeMillis()
+                if (!changed) return@launch
+                val rest = snap.entries.filter { it.type != ContentType.LIVE }
+                val fresh = Snapshot(snap.source, snap.savedAt, snap.epgUrl, live + rest, snap.series)
+                publish(fresh)
+                Snapshot.write(snapshotFile, fresh)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Keep what is on screen; the next visit to Live TV tries again.
+            }
+        }
+    }
+
     private fun publish(snap: Snapshot) {
         val library = Library(snap.entries, snap.epgUrl, snap.series)
         val view = library.view(LibraryFilter(store.languages.value))
@@ -116,6 +149,7 @@ class PlaylistRepository(
         _view.value = view
         _state.value = State.Ready(library)
         _lastUpdated.value = snap.savedAt
+        if (liveRefreshedAt < snap.savedAt) liveRefreshedAt = snap.savedAt
     }
 
     /** Fetches the catalogue from the provider, reusing what is unchanged, and saves it. */
@@ -227,5 +261,6 @@ class PlaylistRepository(
     companion object {
         /** A saved catalogue older than this is refreshed quietly when the app opens. */
         private const val AUTO_REFRESH_MS = 24 * 3_600_000L
+        private const val LIVE_REFRESH_MS = 3_600_000L
     }
 }

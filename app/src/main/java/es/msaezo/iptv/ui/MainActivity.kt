@@ -150,7 +150,7 @@ private fun SideRail(nav: Nav, focusOnStart: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Image(painterResource(R.mipmap.ic_launcher), "TUTV", Modifier.size(30.dp))
+        Image(painterResource(R.drawable.logo_mark), "TUTV", Modifier.size(28.dp))
         Spacer(Modifier.weight(1f))
         for (t in listOf(Tab.SEARCH, Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.LIVE)) {
             RailItem(t, nav, if (t == Tab.HOME) homeFocus else null)

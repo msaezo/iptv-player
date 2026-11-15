@@ -39,6 +39,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -64,6 +66,8 @@ object Playback {
         val startPositionMs: Long = 0L,
         /** Live TV: the same channel in other qualities (best first; includes [url]). */
         val alternatives: List<Alt> = emptyList(),
+        /** Films share one audio / subtitle preference; each series keeps its own. */
+        val memoryKey: String? = null,
     )
 
     data class Alt(val label: String, val url: String)
@@ -99,6 +103,7 @@ class PlayerActivity : ComponentActivity() {
     private val store get() = IptvApp.instance.store
     private var live = false
     private var liveRetries = 0
+    private var userPickedTracks = false
     /** Which quality of the current live channel is playing (index into its alternatives). */
     private var liveAlt = 0
     private var errorDialog: AlertDialog? = null
@@ -226,8 +231,40 @@ class PlayerActivity : ComponentActivity() {
         }
         setContentView(root)
 
+        // Start in the audio and subtitle language chosen last time for this series (or for films).
+        first.memoryKey?.let { store.trackPref(it) }?.let { saved ->
+            val audio = saved.substringBefore('|')
+            val text = saved.substringAfter('|', "")
+            val b = player.trackSelectionParameters.buildUpon()
+            if (audio.isNotEmpty()) b.setPreferredAudioLanguage(audio)
+            if (text.isNotEmpty() && text != "-") b.setPreferredTextLanguage(text)
+            player.trackSelectionParameters = b.build()
+        }
+
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) = handleError(error)
+
+            // Fired when a track is picked in the on-screen menus (the one above ran earlier).
+            override fun onTrackSelectionParametersChanged(parameters: TrackSelectionParameters) {
+                userPickedTracks = true
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                if (live || !userPickedTracks) return
+                val key = Playback.queue.getOrNull(Playback.index)?.memoryKey ?: return
+                fun selected(type: Int): String? {
+                    for (g in tracks.groups) {
+                        if (g.type != type || !g.isSelected) continue
+                        for (i in 0 until g.length) {
+                            if (g.isTrackSelected(i)) return g.getTrackFormat(i).language?.takeIf { it != "und" }
+                        }
+                    }
+                    return null
+                }
+                val audio = selected(C.TRACK_TYPE_AUDIO).orEmpty()
+                val text = selected(C.TRACK_TYPE_TEXT) ?: "-"
+                store.setTrackPref(key, "$audio|$text")
+            }
 
             override fun onCues(cueGroup: CueGroup) {
                 val text = SpannableStringBuilder()

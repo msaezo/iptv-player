@@ -36,6 +36,16 @@ data class TmdbItem(
     val backdropLargeUrl get() = backdrop?.let { "https://image.tmdb.org/t/p/w1280$it" }
 }
 
+/**
+ * The properly written title from TMDB for a catalogue entry with merge key [key], when it is
+ * clearly the same title (only spelling, capitals or accents differ). Null otherwise.
+ */
+fun TmdbItem.titleFor(key: String): String? = when {
+    title.isNotBlank() && Tags.mergeKey(title) == key -> title
+    originalTitle.isNotBlank() && Tags.mergeKey(originalTitle) == key -> originalTitle
+    else -> null
+}
+
 data class Ratings(val imdb: String?, val rottenTomatoes: String?, val metacritic: String?)
 
 data class MetaDetails(

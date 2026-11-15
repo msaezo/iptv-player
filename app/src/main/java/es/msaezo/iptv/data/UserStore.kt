@@ -52,6 +52,17 @@ class UserStore(context: Context) {
         _audioOffset.value = v; prefs.edit().putInt("audioOffsetMs", v).apply()
     }
 
+    private val trackPrefs = HashMap(loadMap("trackPrefs"))
+
+    /** Audio and subtitle language last chosen for a series (or for films): "audio|subtitle". */
+    fun trackPref(key: String): String? = trackPrefs[key]
+
+    fun setTrackPref(key: String, value: String) {
+        if (trackPrefs[key] == value) return
+        trackPrefs[key] = value
+        prefs.edit().putString("trackPrefs", JSONObject(trackPrefs as Map<*, *>).toString()).apply()
+    }
+
     private val _favorites = MutableStateFlow(prefs.getStringSet("favorites", emptySet())!!.toSet())
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
 

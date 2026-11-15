@@ -111,30 +111,7 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             return map
         }
 
-        val liveJob = {
-            val cats = categories("get_live_categories")
-            val out = ArrayList<Entry>(8192)
-            Http.read(acc.api("get_live_streams"), userAgent()) { reader ->
-                readArray(reader, LIVE_KEYS) { o ->
-                    val id = o["stream_id"] ?: return@readArray
-                    val name = o["name"]?.trim().orEmpty().ifEmpty { "Channel $id" }
-                    val group = cats[o["category_id"]] ?: "Uncategorized"
-                    val liveUrl = acc.liveUrl(id)
-                    val logo = o["stream_icon"]?.takeIf { it.startsWith("http") }
-                    val old = previous?.get(liveUrl)
-                    out += if (old != null && old.rawName == name && old.group == group && old.logo == logo) old
-                    else Entry(
-                        title = name, rawName = name, url = liveUrl, logo = logo,
-                        group = group, tvgId = o["epg_channel_id"]?.takeIf { it.isNotBlank() },
-                        type = ContentType.LIVE,
-                        language = Tags.languageOfGroup(group) ?: Tags.UNKNOWN,
-                        quality = Tags.quality(name, group),
-                    )
-                    if (live.incrementAndGet() % 2000 == 0) tick()
-                }
-            }
-            out
-        }
+        val liveJob = { loadLive(acc, previous) { if (live.incrementAndGet() % 2000 == 0) tick() } }
         val movieJob = {
             val cats = categories("get_vod_categories")
             val out = ArrayList<Entry>(32_768)
@@ -208,6 +185,38 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
         val entries = ArrayList<Entry>(liveList.size + movieList.size)
         entries.addAll(liveList); entries.addAll(movieList)
         return XtreamData(entries, seriesList, acc.epgUrl)
+    }
+
+    /** Just the live channels: cheap enough to refresh often, so event channels stay current. */
+    fun loadLive(acc: XtreamAccount, previous: Map<String, Entry>?, onItem: () -> Unit = {}): List<Entry> {
+        val cats = HashMap<String, String>()
+        Http.read(acc.api("get_live_categories"), userAgent()) { reader ->
+            readArray(reader, CATEGORY_KEYS) { o ->
+                val id = o["category_id"] ?: return@readArray
+                cats[id] = o["category_name"]?.trim().orEmpty().ifEmpty { id }
+            }
+        }
+        val out = ArrayList<Entry>(8192)
+        Http.read(acc.api("get_live_streams"), userAgent()) { reader ->
+            readArray(reader, LIVE_KEYS) { o ->
+                val id = o["stream_id"] ?: return@readArray
+                val name = o["name"]?.trim().orEmpty().ifEmpty { "Channel $id" }
+                val group = cats[o["category_id"]] ?: "Uncategorized"
+                val liveUrl = acc.liveUrl(id)
+                val logo = o["stream_icon"]?.takeIf { it.startsWith("http") }
+                val old = previous?.get(liveUrl)
+                out += if (old != null && old.rawName == name && old.group == group && old.logo == logo) old
+                else Entry(
+                    title = name, rawName = name, url = liveUrl, logo = logo,
+                    group = group, tvgId = o["epg_channel_id"]?.takeIf { it.isNotBlank() },
+                    type = ContentType.LIVE,
+                    language = Tags.languageOfGroup(group) ?: Tags.UNKNOWN,
+                    quality = Tags.quality(name, group),
+                )
+                onItem()
+            }
+        }
+        return out
     }
 
     /** Episodes of one series (all seasons), as playable entries. */

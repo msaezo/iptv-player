@@ -15,7 +15,13 @@ import java.util.concurrent.ConcurrentHashMap
 data class Programme(val title: String, val start: Long, val end: Long)
 
 /** What a channel is showing now and what comes next (either may be missing). */
-data class NowNext(val now: Programme?, val next: Programme?, val fetchedAt: Long)
+data class NowNext(
+    val now: Programme?,
+    val next: Programme?,
+    val fetchedAt: Long,
+    /** Everything known from now on, in order. */
+    val items: List<Programme> = emptyList(),
+)
 
 /**
  * Programme guide, asked from the provider one channel at a time and only for the
@@ -58,7 +64,7 @@ class EpgRepository(
 
     private fun fetch(acc: XtreamAccount, entry: Entry): NowNext {
         val id = entry.url.substringAfterLast('/').substringBefore('.')
-        val text = Http.getText(acc.api("get_short_epg", "&stream_id=$id&limit=4"), store.userAgent.value)
+        val text = Http.getText(acc.api("get_short_epg", "&stream_id=$id&limit=10"), store.userAgent.value)
         val list = JSONObject(text).optJSONArray("epg_listings")
         val nowMs = System.currentTimeMillis()
         val items = ArrayList<Programme>()
@@ -74,7 +80,7 @@ class EpgRepository(
         items.sortBy { it.start }
         val now = items.firstOrNull { it.start <= nowMs && nowMs < it.end }
         val next = items.firstOrNull { it.start > nowMs }
-        return NowNext(now, next, nowMs)
+        return NowNext(now, next, nowMs, items.filter { it.end > nowMs })
     }
 
     private fun decode(s: String): String = try {

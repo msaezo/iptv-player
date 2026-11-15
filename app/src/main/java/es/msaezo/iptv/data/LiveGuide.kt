@@ -63,7 +63,7 @@ class LiveGuide(entries: List<Entry>) {
                 region = key.substringBefore('|').ifEmpty { null },
                 topic = topic, sport = sport, isEvent = isEvent,
                 announced = isEvent && looksAnnounced(first.rawName),
-                pack = first.group, versions = sorted, labels = sorted.map { versionLabel(it.rawName) },
+                pack = first.group, versions = sorted, labels = labelsOf(sorted),
             ).also { ch -> for (v in sorted) byUrl[v.url] = ch }
         }
 
@@ -194,7 +194,7 @@ class LiveGuide(entries: List<Entry>) {
             val shown = Tags.displayTitle(rawName)
             val words = shown.split(' ').filter { it.isNotEmpty() }.toMutableList()
             while (words.size > 1) {
-                val w = words.last().uppercase().trim('(', ')', '[', ']', '*', '-')
+                val w = Tags.plain(words.last()).trim('(', ')', '[', ']', '*', '-')
                 if (w.isEmpty() || w in QUALITY_WORDS || w in VARIANT_WORDS) words.removeAt(words.size - 1) else break
             }
             return words.joinToString(" ").ifEmpty { rawName.trim() }
@@ -205,6 +205,22 @@ class LiveGuide(entries: List<Entry>) {
             Tags.tokens(Tags.displayTitle(rawName))
                 .filter { it !in QUALITY_WORDS && it !in VARIANT_WORDS }
                 .joinToString(" ").lowercase()
+
+        /** One label per version; identical ones are numbered so they can be told apart. */
+        internal fun labelsOf(versions: List<Entry>): List<String> {
+            val raw = versions.map { versionLabel(it.rawName) }
+            if (raw.size < 2) return raw
+            val seen = HashMap<String, Int>()
+            val repeated = raw.groupingBy { it }.eachCount()
+            return raw.map { l ->
+                if (repeated.getValue(l) == 1) l
+                else {
+                    val n = (seen[l] ?: 0) + 1
+                    seen[l] = n
+                    if (l == "Standard") "Source $n" else "$l ($n)"
+                }
+            }
+        }
 
         internal fun versionLabel(rawName: String): String {
             val parts = Tags.tokens(rawName).filter { it in QUALITY_WORDS || it in VARIANT_WORDS }.distinct()

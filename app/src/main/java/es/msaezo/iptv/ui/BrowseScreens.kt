@@ -59,6 +59,13 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.ui.graphics.vector.ImageVector
 import es.msaezo.iptv.IptvApp
+import androidx.compose.ui.unit.coerceAtLeast
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.LaunchedEffect
@@ -262,6 +269,13 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val recent by store.recentLive.collectAsState()
     val nowNext by IptvApp.instance.epg.guide.collectAsState()
     val guide = rememberLiveGuide(view)
+    // Event channels are renamed through the day: re-read the channel list when it is an hour old.
+    LaunchedEffect(Unit) { IptvApp.instance.playlists.refreshLiveIfStale() }
+    val nowMs by produceState(System.currentTimeMillis()) {
+        while (true) {
+            delay(30_000); value = System.currentTimeMillis()
+        }
+    }
     if (guide == null) {
         CenterMessage("Organising channels…", loading = true); return
     }
@@ -299,16 +313,19 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                     }
                 }
             }
+            val windowStart = (nowMs - 15 * 60_000L) / HALF_HOUR * HALF_HOUR
+            if (wide) GuideHeader(windowStart)
             LazyColumn(
                 state = nav.liveList,
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
                 itemsIndexed(filter.items, key = { _, ch -> ch.id }) { i, ch ->
                     ChannelRow(i + 1, ch, nowNext[ch.id], isFavorite(ch, favorites),
                         onFavorite = { toggleFavorite(ch, favorites) },
-                        onClick = { Actions.playLive(context, filter.items, i) })
+                        onClick = { Actions.playLive(context, filter.items, i) },
+                        timeline = wide, nowMs = nowMs, windowStart = windowStart)
                 }
             }
         }
@@ -347,7 +364,75 @@ fun liveBadge(name: String): String? = when (name) {
 }
 
 private val clock = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT)
-private fun hhmm(ms: Long): String = synchronized(clock) { clock.format(java.util.Date(ms)) }
+fun hhmm(ms: Long): String = synchronized(clock) { clock.format(java.util.Date(ms)) }
+
+private const val HALF_HOUR = 30 * 60_000L
+/** How much time the programme strip shows. */
+private const val WINDOW_MS = 3 * 60 * 60_000L
+private const val INFO_WEIGHT = 0.38f
+private const val LANE_WEIGHT = 0.62f
+
+/** Clock times above the programme strips, lined up with them. */
+@Composable
+private fun GuideHeader(windowStart: Long) {
+    Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 78.dp, top = 2.dp)) {
+        Spacer(Modifier.weight(INFO_WEIGHT))
+        BoxWithConstraints(Modifier.weight(LANE_WEIGHT).height(18.dp)) {
+            val w = maxWidth
+            var t = windowStart
+            while (t < windowStart + WINDOW_MS) {
+                Text(
+                    hhmm(t), maxLines = 1, softWrap = false,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.offset(x = w * ((t - windowStart).toFloat() / WINDOW_MS)),
+                )
+                t += HALF_HOUR
+            }
+        }
+    }
+}
+
+/** One channel's programmes as boxes on a time strip, with a line marking the present. */
+@Composable
+private fun ProgrammeLane(guide: NowNext?, quiet: Boolean, nowMs: Long, windowStart: Long, modifier: Modifier) {
+    BoxWithConstraints(modifier.height(38.dp).clipToBounds()) {
+        val w = maxWidth
+        fun x(t: Long): Dp = w * ((t - windowStart).coerceIn(0L, WINDOW_MS).toFloat() / WINDOW_MS)
+        val shown = guide?.items.orEmpty().filter { it.end > windowStart && it.start < windowStart + WINDOW_MS }
+        if (shown.isEmpty()) {
+            Box(Modifier.fillMaxSize().background(Color(0xFF111111)), contentAlignment = Alignment.CenterStart) {
+                val note = when {
+                    guide == null -> ""
+                    quiet -> "No event announced"
+                    else -> "No programme information"
+                }
+                Text(
+                    note, Modifier.padding(start = 10.dp), maxLines = 1,
+                    color = Color(0xFF6E6E6E), style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        for (p in shown) {
+            val x0 = x(p.start)
+            val width = (x(p.end) - x0 - 2.dp).coerceAtLeast(2.dp)
+            val current = p.start <= nowMs && nowMs < p.end
+            Box(
+                Modifier.offset(x = x0).width(width).fillMaxHeight()
+                    .background(if (current) Color(0xFF3B3B3B) else Color(0xFF222222))
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    p.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = if (current) FontWeight.Medium else FontWeight.Normal,
+                    color = if (current) Color.White else Color(0xFFBDBDBD),
+                )
+            }
+        }
+        Box(Modifier.offset(x = x(nowMs)).width(2.dp).fillMaxHeight().background(Brand))
+    }
+}
 
 @Composable
 fun ChannelRow(
@@ -357,6 +442,9 @@ fun ChannelRow(
     favorite: Boolean,
     onFavorite: () -> Unit,
     onClick: () -> Unit,
+    timeline: Boolean = false,
+    nowMs: Long = System.currentTimeMillis(),
+    windowStart: Long = 0L,
 ) {
     // Ask for the programme guide only once the row has stayed on screen for a moment.
     LaunchedEffect(ch.id) {
@@ -374,45 +462,49 @@ fun ChannelRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("$number", modifier = Modifier.width(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall)
-            Box(
-                Modifier.size(width = 60.dp, height = 38.dp).background(Color(0xFF262626)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (ch.logo != null) {
-                    AsyncImage(ch.logo, ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
+            Row(if (timeline) Modifier.weight(INFO_WEIGHT) else Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text("$number", modifier = Modifier.width(36.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall)
+                Box(
+                    Modifier.size(width = 56.dp, height = 36.dp).background(Color(0xFF262626)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (ch.logo != null) {
+                        AsyncImage(ch.logo, ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
+                    }
                 }
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
-                    color = if (quiet) Color(0xFF8A8A8A) else Color.White,
-                )
-                val now = guide?.now
-                val next = guide?.next
-                val line = when {
-                    now != null -> "Now  ${now.title}  ·  until ${hhmm(now.end)}" +
-                        (next?.let { "     Next  ${it.title}" } ?: "")
-                    next != null -> "${hhmm(next.start)}  ${next.title}"
-                    quiet -> "No event announced"
-                    else -> null
-                }
-                if (line != null) {
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        line, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (now != null) Color(0xFFD0D0D0) else Color(0xFF8A8A8A),
+                        ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
+                        color = if (quiet) Color(0xFF8A8A8A) else Color.White,
                     )
+                    val now = guide?.now
+                    val next = guide?.next
+                    val kinds = ch.labels.map { it.substringBefore(' ') }.distinct().filter { it != "Standard" && it != "Source" }
+                    val qualities = when {
+                        kinds.size > 1 -> kinds.joinToString(" · ")
+                        ch.versions.size > 1 -> (kinds.firstOrNull()?.let { "$it · " } ?: "") + "${ch.versions.size} sources"
+                        else -> kinds.firstOrNull()
+                    }
+                    val line = if (timeline) qualities else when {
+                        now != null -> "Now  ${now.title}  ·  until ${hhmm(now.end)}" + (next?.let { "     Next  ${it.title}" } ?: "")
+                        next != null -> "${hhmm(next.start)}  ${next.title}"
+                        quiet -> "No event announced"
+                        else -> qualities
+                    }
+                    if (line != null) {
+                        Text(
+                            line, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (!timeline && now != null) Color(0xFFD0D0D0) else Color(0xFF8A8A8A),
+                        )
+                    }
                 }
             }
-            if (ch.versions.size > 1 || ch.labels.first() != "Standard") {
+            if (timeline) {
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    ch.labels.joinToString("  ·  ") { it.substringBefore(' ') }, maxLines = 1,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall,
-                )
+                ProgrammeLane(guide, quiet, nowMs, windowStart, Modifier.weight(LANE_WEIGHT))
             }
         }
         Spacer(Modifier.width(6.dp))
