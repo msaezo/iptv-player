@@ -67,8 +67,8 @@ class EpgRepository(
                 val o = list.optJSONObject(i) ?: continue
                 val start = (o.optString("start_timestamp").toLongOrNull() ?: continue) * 1000
                 val end = (o.optString("stop_timestamp").toLongOrNull() ?: continue) * 1000
-                val title = decode(o.optString("title")).ifBlank { continue }
-                items += Programme(title, start, end)
+                val title = decode(o.optString("title"))
+                if (title.isNotBlank()) items += Programme(title, start, end)
             }
         }
         items.sortBy { it.start }
