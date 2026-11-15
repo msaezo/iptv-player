@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,9 +40,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import es.msaezo.iptv.IptvApp
+import es.msaezo.iptv.R
 import es.msaezo.iptv.data.PlaylistRepository
 import kotlinx.coroutines.delay
 import java.util.Calendar
@@ -115,8 +119,11 @@ private fun TopNav(nav: Nav, focusOnStart: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(220.dp)) {
-            Text(greeting(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("IPTV Player", style = MaterialTheme.typography.bodySmall,
+            Image(
+                painterResource(R.drawable.logo_wordmark), contentDescription = "TUTV",
+                modifier = Modifier.height(30.dp),
+            )
+            Text(greeting(), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.weight(1f))

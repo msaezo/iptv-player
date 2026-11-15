@@ -1,4 +1,4 @@
-# IPTV Player
+# TUTV
 
 A Chillio-style IPTV player for **Android phones, Android TV and Fire TV**.
 
