@@ -10,7 +10,7 @@ data class LibraryFilter(
     val liveRegionOrder: List<String> = listOf("ES", "UK", "US"),
 ) {
     companion object {
-        val DEFAULT_LANGUAGES = setOf("es", "en", "multi", Tags.UNKNOWN)
+        val DEFAULT_LANGUAGES = setOf("es", "en", "multi", "vose", Tags.UNKNOWN)
     }
 }
 
@@ -206,6 +206,48 @@ class LibraryView(val library: Library, val filter: LibraryFilter) {
     val movieCategories: List<Category<Movie>> = categoriesOf(movies) { it.versions.map { v -> v.group } }
     val showCategories: List<Category<Show>> =
         categoriesOf(shows) { s -> s.episodes.flatMap { ep -> ep.versions.map { it.group } } + s.sources.map { it.group } }
+
+    // --- smart rows (worked out the first time a screen asks for them) -------------------
+
+    val movieGenres: List<Category<Movie>> by lazy {
+        byGenre(movies) { m -> m.versions.map { it.group } }
+    }
+    val showGenres: List<Category<Show>> by lazy {
+        byGenre(shows) { s -> s.sources.map { it.group } + s.episodes.flatMap { ep -> ep.versions.map { it.group } } }
+    }
+    val recentMovies: List<Movie> by lazy {
+        movies.filter { it.added > 0 }.sortedByDescending { it.added }.take(60)
+    }
+    val recentShows: List<Show> by lazy {
+        shows.filter { it.added > 0 }.sortedByDescending { it.added }.take(60)
+    }
+    val thisYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val newMovies: List<Movie> by lazy {
+        movies.filter { it.year == thisYear }.sortedByDescending { it.rating ?: 0.0 }.take(60)
+    }
+    val topRatedMovies: List<Movie> by lazy {
+        movies.filter { val r = it.rating; r != null && r >= 7.0 && r <= 9.4 && it.poster != null }
+            .sortedByDescending { it.rating }.take(60)
+    }
+    val topRatedShows: List<Show> by lazy {
+        shows.filter { val r = it.rating; r != null && r >= 7.0 && r <= 9.4 && it.poster != null }
+            .sortedByDescending { it.rating }.take(60)
+    }
+
+    private fun <T> byGenre(items: List<T>, groups: (T) -> List<String>): List<Category<T>> {
+        val map = HashMap<String, MutableList<T>>()
+        for (item in items) {
+            var last: String? = null
+            for (g in groups(item)) {
+                val genre = Tags.genreOfGroup(g) ?: continue
+                if (genre == last) continue
+                val list = map.getOrPut(genre) { ArrayList() }
+                if (list.lastOrNull() !== item) list.add(item)
+                last = genre
+            }
+        }
+        return Tags.genreOrder.mapNotNull { g -> map[g]?.let { Category<T>(g, it) } }
+    }
 
     // Only needed for "Continue watching": built the first time it is asked for.
     private val movieByUrl by lazy {

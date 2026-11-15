@@ -189,13 +189,13 @@ private fun Content(nav: Nav, wide: Boolean, state: PlaylistRepository.State) {
     }
     when (state) {
         is PlaylistRepository.State.NoPlaylist -> CenterMessage("Add your M3U playlist to get started") {
-            Button(onClick = { nav.select(Tab.SETTINGS) }) { Text("Open Settings") }
+            Button(modifier = Modifier.focusRing(), onClick = { nav.select(Tab.SETTINGS) }) { Text("Open Settings") }
         }
         is PlaylistRepository.State.Loading -> CenterMessage(state.message, loading = true)
         is PlaylistRepository.State.Error -> CenterMessage("Couldn't load the playlist:\n${state.message}") {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { app.playlists.load(forceDownload = true) }) { Text("Retry") }
-                OutlinedButton(onClick = { nav.select(Tab.SETTINGS) }) { Text("Settings") }
+                Button(modifier = Modifier.focusRing(), onClick = { app.playlists.load(forceDownload = true) }) { Text("Retry") }
+                OutlinedButton(modifier = Modifier.focusRing(), onClick = { nav.select(Tab.SETTINGS) }) { Text("Settings") }
             }
         }
         is PlaylistRepository.State.Ready -> {
@@ -207,6 +207,7 @@ private fun Content(nav: Nav, wide: Boolean, state: PlaylistRepository.State) {
                 is Route.ShowDetail -> ShowDetailScreen(route.id, v, nav, wide)
                 is Route.CollectionRoute -> CollectionScreen(route.key, nav, wide)
                 is Route.CategoryRoute -> CategoryScreen(route, v, nav, wide)
+                is Route.ItemsRoute -> ItemsScreen(route, nav, wide)
                 null -> when (nav.tab) {
                     Tab.HOME -> HomeScreen(v, nav, wide)
                     Tab.MOVIES -> MoviesScreen(v, nav, wide)

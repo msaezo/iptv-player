@@ -105,11 +105,11 @@ fun SettingsScreen(wide: Boolean) {
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { if (url.isNotBlank()) app.playlists.setPlaylist(url) }) { Text("Save & load") }
-                        OutlinedButton(onClick = { app.playlists.load(forceDownload = true) }, enabled = savedUrl.isNotBlank()) {
+                        Button(modifier = Modifier.focusRing(), onClick = { if (url.isNotBlank()) app.playlists.setPlaylist(url) }) { Text("Save & load") }
+                        OutlinedButton(modifier = Modifier.focusRing(), onClick = { app.playlists.load(forceDownload = true) }, enabled = savedUrl.isNotBlank()) {
                             Text("Refresh now")
                         }
-                        OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) { Text("Open .m3u file") }
+                        OutlinedButton(modifier = Modifier.focusRing(), onClick = { picker.launch(arrayOf("*/*")) }) { Text("Open .m3u file") }
                     }
                     val status = when (val s = state) {
                         is PlaylistRepository.State.NoPlaylist -> "No playlist yet."
@@ -179,7 +179,7 @@ fun SettingsScreen(wide: Boolean) {
                         value = omdb, onValueChange = { omdb = it }, label = { Text("OMDb API key") },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
-                    Button(onClick = { store.setTmdbKey(tmdb); store.setOmdbKey(omdb) }) { Text("Save keys") }
+                    Button(modifier = Modifier.focusRing(), onClick = { store.setTmdbKey(tmdb); store.setOmdbKey(omdb) }) { Text("Save keys") }
                     if (metaError != null) Text("Last error: $metaError", color = MaterialTheme.colorScheme.error)
                 }
             }
@@ -194,8 +194,8 @@ fun SettingsScreen(wide: Boolean) {
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { store.setUserAgent(ua) }) { Text("Save") }
-                        OutlinedButton(onClick = { store.clearHistory() }) { Text("Clear watch history") }
+                        Button(modifier = Modifier.focusRing(), onClick = { store.setUserAgent(ua) }) { Text("Save") }
+                        OutlinedButton(modifier = Modifier.focusRing(), onClick = { store.clearHistory() }) { Text("Clear watch history") }
                     }
                 }
             }

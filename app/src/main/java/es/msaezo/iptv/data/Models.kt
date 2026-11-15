@@ -20,6 +20,8 @@ data class Entry(
     val rating: Double? = null,
     /** Pre-computed key used to merge versions of the same movie / show. */
     val key: String = "",
+    /** When the provider added it (epoch seconds, 0 = unknown). */
+    val added: Long = 0,
     val userAgent: String? = null,
     val referrer: String? = null,
 ) {
@@ -44,6 +46,7 @@ data class Movie(
     val groups: Set<String> by lazy { versions.mapTo(LinkedHashSet()) { it.group } }
     val languages: List<String> by lazy { versions.map { it.language }.distinct() }
     val rating: Double? by lazy { versions.mapNotNull { it.rating }.maxOrNull() }
+    val added: Long by lazy { versions.maxOf { it.added } }
 }
 
 /** One episode, possibly available in several versions. */
@@ -76,6 +79,7 @@ data class Show(
     }
     val rating: Double? by lazy { sources.mapNotNull { it.rating }.maxOrNull() }
     val year: Int? by lazy { sources.firstNotNullOfOrNull { it.year } }
+    val added: Long by lazy { sources.maxOfOrNull { it.added } ?: 0L }
     fun episodesOf(season: Int): List<Episode> = episodes.filter { it.season == season }
 }
 

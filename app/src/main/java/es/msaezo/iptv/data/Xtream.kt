@@ -23,6 +23,8 @@ data class SeriesSource(
     val rating: Double?,
     val language: String,
     val year: Int?,
+    /** Last time the provider touched it (epoch seconds, 0 = unknown). */
+    val added: Long = 0,
 )
 
 /** Credentials + server of an Xtream Codes panel, derived from a get.php / player_api.php URL. */
@@ -137,7 +139,9 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             )
             val year = base.year ?: o["year"]?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2100 }
             val rating = parseRating(o["rating"])
-            entries += if (base.year == year && base.rating == rating) base else base.copy(year = year, rating = rating)
+            val added = o["added"]?.toLongOrNull() ?: 0L
+            entries += if (base.year == year && base.rating == rating && base.added == added) base
+            else base.copy(year = year, rating = rating, added = added)
         }
         progress("Reading series…")
         val series = ArrayList<SeriesSource>(8192)
@@ -145,8 +149,9 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             val id = o["series_id"] ?: return@readArray
             val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
             val group = seriesCats[o["category_id"]] ?: "Series"
+            val modified = o["last_modified"]?.toLongOrNull() ?: 0L
             val oldSeries = previousSeries?.get(id)
-            if (oldSeries != null && oldSeries.rawName == name && oldSeries.group == group) {
+            if (oldSeries != null && oldSeries.rawName == name && oldSeries.group == group && oldSeries.added == modified) {
                 series += oldSeries
                 return@readArray
             }
@@ -157,6 +162,7 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
                 rating = parseRating(o["rating"]),
                 language = Tags.language(name, group),
                 year = y ?: (o["releaseDate"] ?: o["release_date"])?.take(4)?.toIntOrNull(),
+                added = modified,
             )
         }
         // The raw lists are no longer needed: the organised catalogue is saved separately.

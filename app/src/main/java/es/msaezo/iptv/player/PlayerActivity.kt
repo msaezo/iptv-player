@@ -5,6 +5,13 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import androidx.core.content.res.ResourcesCompat
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
+import androidx.media3.ui.DefaultTimeBar
+import es.msaezo.iptv.R
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -78,6 +85,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
     private lateinit var infoText: TextView
+    private lateinit var subtitleText: TextView
     private val handler = Handler(Looper.getMainLooper())
     private val store get() = IptvApp.instance.store
     private var live = false
@@ -123,8 +131,8 @@ class PlayerActivity : ComponentActivity() {
 
         player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http), extractors))
-            .setSeekBackIncrementMs(10_000)
-            .setSeekForwardIncrementMs(30_000)
+            .setSeekBackIncrementMs(JUMP_MS)
+            .setSeekForwardIncrementMs(JUMP_MS)
             .build()
         player.setAudioAttributes(AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
@@ -142,6 +150,36 @@ class PlayerActivity : ComponentActivity() {
             setShowNextButton(!live && queue.size > 1)
             setShowPreviousButton(!live && queue.size > 1)
         }
+        // Left / right on the progress bar also move one minute (the default was 1/20 of the film).
+        playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.setKeyTimeIncrement(JUMP_MS)
+
+        // Subtitles: our own text view, so they can sit on a soft rounded plate, centred.
+        val screenShort = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+        subtitleText = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            typeface = runCatching { ResourcesCompat.getFont(this@PlayerActivity, R.font.subtitle_serif) }.getOrNull()
+                ?: Typeface.SERIF
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, screenShort * 0.05f)
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            includeFontPadding = false
+            setLineSpacing(0f, 1.12f)
+            val h = (screenShort * 0.022f).toInt()
+            val v = (screenShort * 0.010f).toInt()
+            setPadding(h, v, h, v)
+            background = GradientDrawable().apply {
+                setColor(Color.argb(96, 30, 30, 30))
+                cornerRadius = screenShort * 0.014f
+            }
+            setShadowLayer(screenShort * 0.004f, 0f, screenShort * 0.0015f, Color.argb(200, 0, 0, 0))
+            maxWidth = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.8f).toInt()
+            visibility = View.GONE
+        }
+        // Lift the subtitles above the playback controls while those are showing.
+        playerView.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+            subtitleText.translationY = if (visibility == View.VISIBLE) -screenShort * 0.17f else 0f
+        })
+
         infoText = TextView(this).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
@@ -154,6 +192,9 @@ class PlayerActivity : ComponentActivity() {
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(playerView, FrameLayout.LayoutParams(-1, -1))
+            addView(subtitleText, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                bottomMargin = (screenShort * 0.07f).toInt()
+            })
             addView(infoText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
                 setMargins(dp(32), dp(24), 0, 0)
             })
@@ -162,6 +203,27 @@ class PlayerActivity : ComponentActivity() {
 
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) = handleError(error)
+
+            override fun onCues(cueGroup: CueGroup) {
+                val text = SpannableStringBuilder()
+                val pictures = ArrayList<Cue>()
+                for (cue in cueGroup.cues) {
+                    val t = cue.text
+                    if (t != null) {
+                        val line = t.trim()
+                        if (line.isNotEmpty()) {
+                            if (text.isNotEmpty()) text.append("\n")
+                            text.append(line)
+                        }
+                    } else if (cue.bitmap != null) {
+                        pictures += cue
+                    }
+                }
+                subtitleText.text = text
+                subtitleText.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+                // Picture-based subtitles (DVD / Blu-ray style) still use the built-in view.
+                playerView.subtitleView?.setCues(pictures)
+            }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) liveRetries = 0
@@ -338,6 +400,9 @@ class PlayerActivity : ComponentActivity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
+        /** Size of one jump back / forward. */
+        const val JUMP_MS = 60_000L
+
         fun formatTime(ms: Long): String {
             val s = ms / 1000
             return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)

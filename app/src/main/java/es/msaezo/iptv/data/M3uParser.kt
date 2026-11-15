@@ -152,7 +152,6 @@ object Classifier {
 
     private val yearRegex = Regex("""[(\[]\s*((?:19|20)\d{2})\s*[)\]]""")
     private val trailingYearRegex = Regex("""\s+[-–]\s*((?:19|20)\d{2})\s*$""")
-    private val prefixRegex = Regex("""^\s*[A-Za-z0-9+]{2,5}\s*[|:]\s*""")
     private val vodWord = Regex("""(?i)(^|[^a-z])vod([^a-z]|$)""")
     private val seriesWord = Regex("""(?i)(series|serie\b|séries|tv ?shows?|temporada|season)""")
     private val loopWord = Regex("""24\s*/\s*7|24-7|24h""", RegexOption.IGNORE_CASE)
@@ -170,12 +169,9 @@ object Classifier {
         return null
     }
 
-    /** Removes provider prefixes like "ES | " and trailing separators. */
+    /** Trims stray separators. Tag prefixes ("ES | ") are removed by [Tags.displayTitle]. */
     fun cleanTitle(s: String): String =
-        s.replace(prefixRegex, "")
-            .trim()
-            .trimEnd('-', '–', '_', '.', '|', ':', '(', '[', ',', ' ')
-            .trim()
+        s.trim().trimEnd('-', '–', '_', '.', '|', ':', '(', '[', ',', ' ').trim()
 
     private fun extension(url: String): String {
         val path = url.substringBefore('?').substringBefore('#')

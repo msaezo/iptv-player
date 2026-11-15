@@ -18,7 +18,7 @@ class Snapshot(
     val series: List<SeriesSource>,
 ) {
     companion object {
-        private const val VERSION = 0x54555602
+        private const val VERSION = 0x54555603
 
         fun write(file: File, s: Snapshot) {
             val tmp = File(file.parentFile, file.name + ".tmp")
@@ -49,6 +49,7 @@ class Snapshot(
                     o.opt(e.quality)
                     o.writeDouble(e.rating ?: -1.0)
                     o.str(e.key)
+                    o.writeLong(e.added)
                     o.opt(e.userAgent)
                     o.opt(e.referrer)
                 }
@@ -61,6 +62,7 @@ class Snapshot(
                     o.writeDouble(x.rating ?: -1.0)
                     o.str(x.language)
                     o.writeInt(x.year ?: -1)
+                    o.writeLong(x.added)
                 }
             }
             if (!tmp.renameTo(file)) {
@@ -99,12 +101,13 @@ class Snapshot(
                         val quality = i.opt()?.let(::shared)
                         val rating = i.readDouble().takeIf { it >= 0 }
                         val key = i.readUTF()
+                        val added = i.readLong()
                         val ua = i.opt()
                         val ref = i.opt()
                         entries += Entry(
                             title = title, rawName = raw, url = url, logo = logo, group = group, tvgId = tvg,
                             type = type, year = year, showName = show, season = season, episode = episode,
-                            language = lang, quality = quality, rating = rating, key = key,
+                            language = lang, quality = quality, rating = rating, key = key, added = added,
                             userAgent = ua, referrer = ref,
                         )
                     }
@@ -119,7 +122,7 @@ class Snapshot(
                         val rating = i.readDouble().takeIf { it >= 0 }
                         val lang = shared(i.readUTF())
                         val year = i.readInt().takeIf { it >= 0 }
-                        series += SeriesSource(id, raw, title, group, cover, rating, lang, year)
+                        series += SeriesSource(id, raw, title, group, cover, rating, lang, year, i.readLong())
                     }
                     Snapshot(source, savedAt, epg, entries, series)
                 }

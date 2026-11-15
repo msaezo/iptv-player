@@ -112,7 +112,7 @@ fun RatingsRow(details: MetaDetails?, fallbackVote: Double?) {
     details?.ratings?.imdb?.let { chips += Triple("IMDb", it, Gold) }
     details?.ratings?.metacritic?.let { chips += Triple("Metacritic", it, Color(0xFF66CC33)) }
     val tmdb = details?.item?.vote ?: fallbackVote
-    if (tmdb != null && tmdb > 0) chips += Triple("TMDB", "%.1f".format(tmdb), Accent)
+    if (tmdb != null && tmdb > 0) chips += Triple("TMDB", "%.1f".format(tmdb), Color(0xFF8CCBFF))
     if (chips.isEmpty()) return
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for ((label, value, color) in chips) {
@@ -226,7 +226,7 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                             progress[v.url]?.takeIf { it.inProgress }?.let {
                                 Text("Watched to ${PlayerActivity.formatTime(it.position)}",
-                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -381,12 +381,12 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                         LinearProgressIndicator(
                             progress = { p.fraction },
                             modifier = Modifier.fillMaxWidth(0.6f).height(3.dp),
-                            color = MaterialTheme.colorScheme.primary,
+                            color = Brand,
                             trackColor = Color(0x33FFFFFF),
                         )
                     }
                 }
-                if (p?.finished == true) Text("✓", color = MaterialTheme.colorScheme.primary, fontSize = 18.sp)
+                if (p?.finished == true) Text("✓", color = Color.White, fontSize = 18.sp)
             }
         }
         item { TmdbAttribution(pad) }

@@ -54,3 +54,37 @@ class ParserTest {
         assertNotNull(lib.epgUrl)
     }
 }
+
+class LanguageTest {
+    private fun lang(name: String, group: String) = Tags.language(name, group)
+
+    @Test fun shortWordsInsideCategoriesAreNotLanguages() {
+        assertEquals(Tags.UNKNOWN, lang("Dune (2021)", "PELICULAS DE ACCION"))
+        assertEquals(Tags.UNKNOWN, lang("Dune (2021)", "MOVIES IN 4K"))
+        assertEquals(Tags.UNKNOWN, lang("Us (2019)", "CINE EN CASA"))
+        assertEquals(Tags.UNKNOWN, lang("It (2017)", "SCI-FI & NO LIMITS"))
+    }
+
+    @Test fun tagsAreLanguages() {
+        assertEquals("en", lang("Dune (2021)", "| EN | ACTION"))
+        assertEquals("en", lang("Dune (2021)", "UK MOVIES"))
+        assertEquals("en", lang("Dune (2021)", "US | MOVIES"))
+        assertEquals("es", lang("It (2017)", "|ES| TERROR"))
+        assertEquals("de", lang("Dune (2021)", "DE | FILME"))
+        assertEquals("lat", lang("Coco (2017)", "ESPAÑOL LATINO"))
+        assertEquals("multi", lang("AZ - Road House (2024)", "ORIGINAL AMAZON 4K MULTI"))
+    }
+
+    @Test fun serviceCodesAreNotLanguagesAndAreStripped() {
+        assertEquals("es", lang("NF - ES - Roma (2018) 4K", "NETFLIX"))
+        assertEquals("Road House", Tags.displayTitle(Classifier.splitYear("AZ - Road House (2024)").first))
+        assertEquals("Dune: Part Two", Tags.displayTitle(Classifier.splitYear("HB - Dune: Part Two (2024)").first))
+        assertEquals("Mission: Impossible", Tags.displayTitle(Classifier.splitYear("Mission: Impossible (1996)").first))
+    }
+
+    @Test fun genres() {
+        assertEquals("Action & Adventure", Tags.genreOfGroup("PELICULAS DE ACCION"))
+        assertEquals("Horror", Tags.genreOfGroup("|ES| TERROR"))
+        assertEquals(null, Tags.genreOfGroup("ORIGINAL AMAZON 4K MULTI"))
+    }
+}

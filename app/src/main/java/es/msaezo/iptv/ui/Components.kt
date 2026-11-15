@@ -1,7 +1,11 @@
 package es.msaezo.iptv.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import es.msaezo.iptv.R
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -75,6 +79,15 @@ fun Modifier.tvClickable(
         .clickable(onClick = onClick)
 }
 
+/** Clear focus ring for standard buttons, so the remote's position is always visible. */
+@Composable
+fun Modifier.focusRing(shape: Shape = RoundedCornerShape(50)): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    return this
+        .onFocusChanged { focused = it.isFocused }
+        .border(3.dp, if (focused) Brand else Color.Transparent, shape)
+}
+
 @Composable
 fun RatingBadge(vote: Double, modifier: Modifier = Modifier) {
     if (vote <= 0.0) return
@@ -99,8 +112,9 @@ fun LanguagePills(langs: List<String>, modifier: Modifier = Modifier) {
                 Tags.shortLabel(it),
                 color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier
-                    .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                    .background(Color(0xD9000000), RoundedCornerShape(4.dp))
+                    .border(1.dp, Color(0x59FFFFFF), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
             )
         }
     }
@@ -228,10 +242,18 @@ fun CenterMessage(text: String, loading: Boolean = false, action: (@Composable (
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
             if (loading) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(16.dp))
+                Image(painterResource(R.drawable.logo_wordmark), "TUTV", Modifier.height(34.dp))
+                Spacer(Modifier.height(28.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.width(180.dp).height(2.dp),
+                    color = Color.White, trackColor = Color(0x33FFFFFF),
+                )
+                Spacer(Modifier.height(20.dp))
             }
-            Text(text, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
+                color = if (loading) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+            )
             if (action != null) {
                 Spacer(Modifier.height(16.dp))
                 action()

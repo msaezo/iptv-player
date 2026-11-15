@@ -376,8 +376,28 @@ object Collections {
         "The Godfather" to 1972, "Casablanca" to 1942,
     )
 
+    private val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+
+    /** Genre rows (named as in [Tags.genreOrder]) → the TMDB collections that feed them. */
+    val genreKeys: Map<String, List<String>> = mapOf(
+        "Action & Adventure" to listOf("m_action", "t_action"),
+        "Comedy" to listOf("m_comedy", "t_comedy"),
+        "Drama" to listOf("m_drama", "t_drama"),
+        "Thriller & Crime" to listOf("m_thriller", "m_crime", "m_mystery", "t_crime", "t_mystery"),
+        "Horror" to listOf("m_horror"),
+        "Sci-Fi & Fantasy" to listOf("m_scifi", "m_fantasy", "t_scifi"),
+        "Romance" to listOf("m_romance"),
+        "Family & Animation" to listOf("m_family", "m_animation", "t_animation"),
+        "Documentaries" to listOf("m_docs", "t_docs"),
+        "War & Western" to listOf("m_war"),
+    )
+
     val movies: List<CollectionDef> = listOf(
         CollectionDef("m_trending", "Trending this week", "movie", "/trending/movie/week", pages = 5),
+        CollectionDef(
+            "m_year", "Most watched of $year", "movie", DISCOVER_MOVIE,
+            mapOf("primary_release_year" to "$year", "sort_by" to "popularity.desc"), pages = 6,
+        ),
         CollectionDef("m_cinema", "In cinemas now", "movie", "/movie/now_playing", mapOf("region" to "ES"), pages = 5),
         CollectionDef("m_popular", "Popular right now", "movie", "/movie/popular", pages = 5),
         CollectionDef("m_top", "All-time classics", "movie", "/movie/top_rated", pages = 10),
@@ -390,6 +410,7 @@ object Collections {
         movieProvider("m_apple", "On Apple TV+", 350),
         movieGenre("m_action", "Action & Adventure", "28|12"),
         movieGenre("m_comedy", "Comedy", "35"),
+        movieGenre("m_drama", "Drama", "18"),
         movieGenre("m_scifi", "Science Fiction", "878"),
         movieGenre("m_fantasy", "Epic Fantasy", "14"),
         movieGenre("m_thriller", "Thrillers", "53"),
@@ -405,6 +426,10 @@ object Collections {
 
     val shows: List<CollectionDef> = listOf(
         CollectionDef("t_trending", "Trending series", "tv", "/trending/tv/week", pages = 5),
+        CollectionDef(
+            "t_year", "Most watched series of $year", "tv", DISCOVER_TV,
+            mapOf("first_air_date_year" to "$year", "sort_by" to "popularity.desc"), pages = 6,
+        ),
         CollectionDef("t_popular", "Popular series", "tv", "/tv/popular", pages = 5),
         CollectionDef("t_top", "Acclaimed series", "tv", "/tv/top_rated", pages = 8),
         tvProvider("t_netflix", "Netflix series", 8),

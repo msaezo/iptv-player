@@ -38,12 +38,20 @@ sealed interface Route {
     data class ShowDetail(val id: String) : Route
     data class CollectionRoute(val key: String) : Route
     data class CategoryRoute(val series: Boolean, val name: String) : Route
+    /** A ready-made list of movies / shows kept in [Nav.lists] ("See all" of a smart row). */
+    data class ItemsRoute(val title: String) : Route
 }
 
 /** Minimal navigation: a selected tab plus a stack of detail screens. */
 class Nav {
     var tab by mutableStateOf(Tab.HOME)
     val stack = mutableStateListOf<Route>()
+    val lists = HashMap<String, List<Any>>()
+
+    fun openList(title: String, items: List<Any>) {
+        lists[title] = items
+        open(Route.ItemsRoute(title))
+    }
 
     var movieCategory by mutableIntStateOf(0)
     var showCategory by mutableIntStateOf(0)
