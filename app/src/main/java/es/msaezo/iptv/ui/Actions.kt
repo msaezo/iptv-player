@@ -122,9 +122,11 @@ class Nav(
 object Actions {
     private val store get() = IptvApp.instance.store
 
-    private fun Entry.toItem(title: String, subtitle: String?, start: Long = 0, memory: String? = null) = Playback.Item(
+    private fun Entry.toItem(
+        title: String, subtitle: String?, start: Long = 0, memory: String? = null, intro: String? = null,
+    ) = Playback.Item(
         url = url, title = title, subtitle = subtitle, userAgent = userAgent, referrer = referrer,
-        startPositionMs = start, memoryKey = memory,
+        startPositionMs = start, memoryKey = memory, introKey = intro,
     )
 
     /** Most recently watched, unfinished version of a movie (if any). */
@@ -160,7 +162,7 @@ object Actions {
         val items = season.drop(startIndex).mapIndexed { i, ep ->
             val v = Library.bestVersion(ep.versions, language)!!
             val start = if (i == 0 && !fromStart) progress[v.url]?.takeIf { it.inProgress }?.position ?: 0L else 0L
-            v.toItem(show.name, "${show.name} · ${ep.label}${if (ep.title.isNotBlank()) " · " + ep.title else ""}", start, "s:${show.id}")
+            v.toItem(show.name, "${show.name} · ${ep.label}${if (ep.title.isNotBlank()) " · " + ep.title else ""}", start, "s:${show.id}", "${show.id}|${ep.season}")
         }
         store.rememberEpisodes(show.id, show.episodes.flatMap { ep -> ep.versions.map { it.url } })
         Preview.stop()

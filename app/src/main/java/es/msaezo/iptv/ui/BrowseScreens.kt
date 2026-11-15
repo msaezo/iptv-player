@@ -299,7 +299,12 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
         nav.liveCategory = it; nav.liveFilter = 0; scope.launch { nav.liveList.scrollToItem(0) }
     }, wide, icon = ::liveIcon, badge = ::liveBadge) { cat ->
         val section = sections.firstOrNull { it.name == cat.name } ?: return@CategoryLayout
-        val filter = section.filters[nav.liveFilter.coerceIn(0, section.filters.size - 1)]
+        val chosen = section.filters[nav.liveFilter.coerceIn(0, section.filters.size - 1)]
+        // Channels with something to show (a programme guide, or an announced event) come first.
+        val filter = remember(chosen) {
+            if (section.name == "Recently watched") chosen
+            else Category(chosen.name, chosen.items.sortedBy { if (it.guideEntry != null || it.announced) 0 else 1 })
+        }
         Column(Modifier.fillMaxSize()) {
             if (section.filters.size > 1) {
                 LazyRow(

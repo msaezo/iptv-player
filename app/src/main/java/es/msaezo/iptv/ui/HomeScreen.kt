@@ -53,6 +53,10 @@ import coil.compose.AsyncImage
 import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.R
 import es.msaezo.iptv.data.LibraryView
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import es.msaezo.iptv.data.LiveGuide
+import es.msaezo.iptv.data.Library
 import es.msaezo.iptv.data.LiveChannel
 import es.msaezo.iptv.data.NowNext
 import androidx.compose.ui.unit.Dp
@@ -166,13 +170,43 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
 
     // "On now": what your favourite (or most recent) channels are showing.
     val recentLive by app.store.recentLive.collectAsState()
-    val wantsLive = recentLive.isNotEmpty() || favorites.any { it.startsWith("l:") }
+    val followAny by app.store.follow.collectAsState()
+    val wantsLive = recentLive.isNotEmpty() || favorites.any { it.startsWith("l:") } || followAny.isNotEmpty()
     val liveGuide = if (wantsLive) rememberLiveGuide(view) else null
     val nowNext by app.epg.guide.collectAsState()
-    val myChannels = remember(liveGuide, favorites, recentLive) {
+    val favChannels = remember(liveGuide, favorites) {
+        liveGuide?.channels.orEmpty()
+            .filter { ch -> "l:${ch.id}" in favorites || ch.versions.any { "l:${it.url}" in favorites } }.take(20)
+    }
+    val recentChannels = remember(liveGuide, recentLive) {
         val g = liveGuide ?: return@remember emptyList()
-        val favs = g.channels.filter { ch -> "l:${ch.id}" in favorites || ch.versions.any { "l:${it.url}" in favorites } }
-        (favs + recentLive.mapNotNull { g.channelOf(it) }).distinct().take(14)
+        recentLive.mapNotNull { g.channelOf(it) }.distinct().take(12)
+    }
+    val myChannels = favChannels.ifEmpty { recentChannels }
+
+    // Teams and players you follow: channels that name them, and programmes that do.
+    val follow by app.store.follow.collectAsState()
+    val followedByName by produceState(emptyList<Pair<LiveChannel, String>>(), liveGuide, follow) {
+        val g = liveGuide
+        value = if (g == null || follow.isEmpty()) emptyList() else withContext(Dispatchers.Default) {
+            followedByName(g, follow)
+        }
+    }
+    val followed = remember(followedByName, nowNext, follow, liveGuide) {
+        val g = liveGuide ?: return@remember emptyList()
+        val merged = LinkedHashMap<String, Pair<LiveChannel, String>>()
+        for (hit in followedByName) merged[hit.first.id] = hit
+        for (hit in followedInGuide(g, follow, nowNext)) merged[hit.first.id] = hit
+        // Spanish channels first; at most a row's worth.
+        merged.values.sortedBy { if (it.first.region == "ES") 0 else 1 }.take(20)
+    }
+    LaunchedEffect(liveGuide, follow) {
+        // Ask for the guide of the main Spanish sports channels, where those names show up.
+        val g = liveGuide ?: return@LaunchedEffect
+        if (follow.isEmpty()) return@LaunchedEffect
+        g.channels.asSequence()
+            .filter { it.region == "ES" && it.topic == LiveGuide.SPORTS && it.guideEntry != null }
+            .take(40).forEach { app.epg.request(it) }
     }
 
     val pad = if (wide) 48.dp else 12.dp
@@ -197,17 +231,24 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             }
         }
         if (myChannels.isNotEmpty()) item {
-            PosterRow("On now · your channels", myChannels, pad) { ch ->
-                OnNowCard(ch, nowNext[ch.id], landW) { Actions.playLive(context, myChannels, myChannels.indexOf(ch)) }
+            PosterRow(if (favChannels.isNotEmpty()) "My channels" else "Recent channels", myChannels, pad) { ch ->
+                OnNowCard(ch, nowNext[ch.id], null, landW) { Actions.playLive(context, myChannels, myChannels.indexOf(ch)) }
             }
         }
-        if (favMovies.isNotEmpty() || favShows.isNotEmpty()) item {
-            val all: List<Any> = favMovies + favShows
-            PosterRow("My list", all, pad) { x ->
-                when (x) {
-                    is Movie -> MovieCard(x, known[x.id], null, portW) { nav.open(Route.MovieDetail(x.id)) }
-                    is Show -> ShowCard(x, known[x.id], portW) { nav.open(Route.ShowDetail(x.id)) }
-                }
+        if (followed.isNotEmpty()) item {
+            val list = followed.map { it.first }
+            PosterRow("Following", followed, pad) { (ch, note) ->
+                OnNowCard(ch, nowNext[ch.id], note, landW) { Actions.playLive(context, list, list.indexOf(ch)) }
+            }
+        }
+        if (favMovies.isNotEmpty()) item {
+            PosterRow("My movies", favMovies, pad) { x ->
+                MovieCard(x, known[x.id], null, portW) { nav.open(Route.MovieDetail(x.id)) }
+            }
+        }
+        if (favShows.isNotEmpty()) item {
+            PosterRow("My series", favShows, pad) { x ->
+                ShowCard(x, known[x.id], portW) { nav.open(Route.ShowDetail(x.id)) }
             }
         }
 
@@ -283,9 +324,36 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     }
 }
 
+/** Sports and event channels whose own name mentions a followed team or player. */
+private fun followedByName(guide: LiveGuide, follow: List<String>): List<Pair<LiveChannel, String>> {
+    val words = follow.map { Library.normalize(it) }.filter { it.length >= 3 }
+    val out = ArrayList<Pair<LiveChannel, String>>()
+    for (ch in guide.channels) {
+        if (!ch.isEvent && ch.topic != LiveGuide.SPORTS) continue
+        if (ch.isEvent && !ch.announced) continue
+        val name = Library.normalize(ch.name)
+        if (words.any { name.contains(it) }) out += ch to ch.name
+        if (out.size >= 40) break
+    }
+    return out
+}
+
+/** Channels with a programme, now or later, that mentions a followed team or player. */
+private fun followedInGuide(guide: LiveGuide, follow: List<String>, epg: Map<String, NowNext>): List<Pair<LiveChannel, String>> {
+    val words = follow.map { Library.normalize(it) }.filter { it.length >= 3 }
+    val out = ArrayList<Pair<LiveChannel, String>>()
+    val nowMs = System.currentTimeMillis()
+    for ((id, nn) in epg) {
+        val ch = guide.channelById(id) ?: continue
+        val p = nn.items.firstOrNull { item -> Library.normalize(item.title).let { t -> words.any { t.contains(it) } } } ?: continue
+        out += ch to (if (p.start <= nowMs) "Now  ${p.title}" else "${hhmm(p.start)}  ${p.title}")
+    }
+    return out
+}
+
 /** A channel with what it is showing right now and until when. */
 @Composable
-private fun OnNowCard(ch: LiveChannel, guide: NowNext?, width: Dp, onClick: () -> Unit) {
+private fun OnNowCard(ch: LiveChannel, guide: NowNext?, note: String?, width: Dp, onClick: () -> Unit) {
     LaunchedEffect(ch.id) { IptvApp.instance.epg.request(ch) }
     Row(
         Modifier
@@ -307,11 +375,11 @@ private fun OnNowCard(ch: LiveChannel, guide: NowNext?, width: Dp, onClick: () -
             Text(ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
             val now = guide?.now
             Text(
-                now?.title ?: guide?.next?.let { "${hhmm(it.start)}  ${it.title}" } ?: "Live",
+                note ?: now?.title ?: guide?.next?.let { "${hhmm(it.start)}  ${it.title}" } ?: "Live",
                 maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color(0xFFD0D0D0),
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (now != null) {
+            if (now != null && note == null) {
                 Text("until ${hhmm(now.end)}", color = Color(0xFF8A8A8A), style = MaterialTheme.typography.labelSmall)
             }
         }

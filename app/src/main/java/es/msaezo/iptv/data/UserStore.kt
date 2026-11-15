@@ -52,6 +52,108 @@ class UserStore(context: Context) {
         _audioOffset.value = v; prefs.edit().putInt("audioOffsetMs", v).apply()
     }
 
+    // --- live buffer, subtitles, followed teams, intro marks, app language ---------------
+
+    private val _liveBuffer = MutableStateFlow(prefs.getInt("liveBufferSec", 0))
+    /** Seconds of live TV to load before starting (0 = start as fast as possible). */
+    val liveBuffer: StateFlow<Int> = _liveBuffer.asStateFlow()
+    fun setLiveBuffer(sec: Int) {
+        _liveBuffer.value = sec; prefs.edit().putInt("liveBufferSec", sec).apply()
+    }
+
+    data class SubtitleStyle(
+        val serif: Boolean = true,
+        /** Percent of the standard size. */
+        val size: Int = 100,
+        /** 0 = no plate, 1 = soft grey, 2 = dark. */
+        val background: Int = 1,
+        /** Distance from the bottom edge, in percent of the screen height. */
+        val position: Int = 7,
+    )
+
+    private val _subtitles = MutableStateFlow(
+        SubtitleStyle(
+            serif = prefs.getBoolean("subSerif", true),
+            size = prefs.getInt("subSize", 100),
+            background = prefs.getInt("subBg", 1),
+            position = prefs.getInt("subPos", 7),
+        )
+    )
+    val subtitles: StateFlow<SubtitleStyle> = _subtitles.asStateFlow()
+    fun setSubtitles(style: SubtitleStyle) {
+        val v = style.copy(
+            size = style.size.coerceIn(60, 180),
+            background = style.background.coerceIn(0, 2),
+            position = style.position.coerceIn(2, 40),
+        )
+        _subtitles.value = v
+        prefs.edit().putBoolean("subSerif", v.serif).putInt("subSize", v.size)
+            .putInt("subBg", v.background).putInt("subPos", v.position).apply()
+    }
+
+    private val _follow = MutableStateFlow(loadList("follow").ifEmpty { if (prefs.contains("follow")) emptyList() else DEFAULT_FOLLOW })
+    /** Teams and players to look out for in live TV. */
+    val follow: StateFlow<List<String>> = _follow.asStateFlow()
+    fun setFollow(list: List<String>) {
+        val v = list.map { it.trim() }.filter { it.length >= 3 }.distinctBy { it.lowercase() }
+        _follow.value = v
+        prefs.edit().putString("follow", JSONArray(v).toString()).apply()
+    }
+
+    private val introMarks = HashMap(loadMap("introMarks"))
+    /** Where a season's intro starts and ends, in ms, as taught by the user. */
+    fun introMark(key: String): Pair<Long, Long>? = introMarks[key]?.let { v ->
+        val a = v.substringBefore('|').toLongOrNull()
+        val b = v.substringAfter('|').toLongOrNull()
+        if (a != null && b != null) a to b else null
+    }
+    fun setIntroMark(key: String, start: Long, end: Long) {
+        introMarks[key] = "$start|$end"
+        prefs.edit().putString("introMarks", JSONObject(introMarks as Map<*, *>).toString()).apply()
+    }
+
+    private val _language = MutableStateFlow(
+        prefs.getString("appLanguage", null) ?: if (java.util.Locale.getDefault().language == "es") "es" else "en"
+    )
+    /** "en" or "es". */
+    val language: StateFlow<String> = _language.asStateFlow()
+    fun setLanguage(lang: String) {
+        _language.value = lang; prefs.edit().putString("appLanguage", lang).apply()
+    }
+
+    // --- moving everything to another device ----------------------------------------------
+
+    /** All settings and personal data as one JSON document. */
+    fun export(): String {
+        val s = JSONObject(); val i = JSONObject(); val b = JSONObject(); val l = JSONObject(); val ss = JSONObject()
+        for ((k, v) in prefs.all) when (v) {
+            is String -> s.put(k, v)
+            is Int -> i.put(k, v)
+            is Boolean -> b.put(k, v)
+            is Long -> l.put(k, v)
+            is Set<*> -> ss.put(k, JSONArray(v.toList()))
+        }
+        return JSONObject().put("tutv", 1).put("s", s).put("i", i).put("b", b).put("l", l).put("ss", ss).toString()
+    }
+
+    /** Replaces everything on this device with an [export] from another one. The app must restart afterwards. */
+    fun import(json: String) {
+        val o = JSONObject(json)
+        if (o.optInt("tutv") != 1) throw IllegalArgumentException("Not a TUTV settings file")
+        val e = prefs.edit().clear()
+        o.optJSONObject("s")?.let { m -> for (k in m.keys()) e.putString(k, m.getString(k)) }
+        o.optJSONObject("i")?.let { m -> for (k in m.keys()) e.putInt(k, m.getInt(k)) }
+        o.optJSONObject("b")?.let { m -> for (k in m.keys()) e.putBoolean(k, m.getBoolean(k)) }
+        o.optJSONObject("l")?.let { m -> for (k in m.keys()) e.putLong(k, m.getLong(k)) }
+        o.optJSONObject("ss")?.let { m ->
+            for (k in m.keys()) {
+                val a = m.getJSONArray(k)
+                e.putStringSet(k, (0 until a.length()).map { a.getString(it) }.toSet())
+            }
+        }
+        e.commit()
+    }
+
     private val trackPrefs = HashMap(loadMap("trackPrefs"))
 
     /** Audio and subtitle language last chosen for a series (or for films): "audio|subtitle". */
@@ -190,6 +292,7 @@ class UserStore(context: Context) {
         /** Lip-sync errors beyond half a second are a broken file, not a delay to tune. */
         const val AUDIO_OFFSET_MAX = 500
         const val AUDIO_OFFSET_STEP = 25
+        val DEFAULT_FOLLOW = listOf("Real Madrid", "Barcelona", "Alcaraz", "Jódar", "España")
         const val DEFAULT_UA = "VLC/3.0.20 LibVLC/3.0.20"
     }
 }

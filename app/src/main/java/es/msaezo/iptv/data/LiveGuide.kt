@@ -35,6 +35,9 @@ class LiveGuide(entries: List<Entry>) {
 
     fun channelOf(url: String): LiveChannel? = byUrl[url]
 
+    private val byId by lazy { channels.associateBy { it.id } }
+    fun channelById(id: String): LiveChannel? = byId[id]
+
     init {
         // 1. fold qualities of the same channel together
         val merged = LinkedHashMap<String, MutableList<Entry>>()

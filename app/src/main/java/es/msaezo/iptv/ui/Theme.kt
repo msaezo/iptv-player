@@ -55,6 +55,9 @@ private val Inter = FontFamily(
     Font(R.font.inter_extrabold, FontWeight.ExtraBold),
 )
 
+/** The typeface the player uses for subtitles, for the sample in Settings. */
+val SubtitleSerif = FontFamily(Font(R.font.subtitle_serif, FontWeight.Normal))
+
 private val type = Typography().let { t ->
     Typography(
         displayLarge = t.displayLarge.copy(fontFamily = Inter),

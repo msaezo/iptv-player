@@ -34,6 +34,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import es.msaezo.iptv.IptvApp
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import es.msaezo.iptv.data.Transfer
+import androidx.compose.ui.unit.coerceAtMost
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
 import es.msaezo.iptv.data.PlaylistRepository
 import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.data.UserStore
@@ -240,6 +251,14 @@ fun SettingsScreen(wide: Boolean) {
                         if (audioOffset != 0) ActionButton("Reset", null, false) { store.setAudioOffset(0) }
                     }
                     Hint("If lips and sound don't match: sound arriving late needs a negative value. While a film is playing, up / down on the remote changes it in 25 ms steps (limit ±500 ms).")
+                    val liveBuffer by store.liveBuffer.collectAsState()
+                    Text("Live TV buffer", fontWeight = FontWeight.Bold)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for ((sec, label) in listOf(0 to "Fast start", 10 to "10 seconds", 20 to "20 seconds", 30 to "30 seconds")) {
+                            Pill(label, liveBuffer == sec) { store.setLiveBuffer(sec) }
+                        }
+                    }
+                    Hint("Loads this much ahead before a channel starts, so a busy server (a big match) is less likely to make it stop. The channel takes that long to appear and you watch that far behind live.")
                     Hint("Some providers only accept certain players. Change the user agent if streams refuse to play.")
                     OutlinedTextField(
                         value = ua, onValueChange = { ua = it }, label = { Text("User agent") },
@@ -255,8 +274,148 @@ fun SettingsScreen(wide: Boolean) {
 
         item {
             Column(Modifier.widthIn(max = 900.dp)) {
+                Section("Subtitles") {
+                    val sub by store.subtitles.collectAsState()
+                    // Sample, drawn the way the player draws them.
+                    Box(
+                        Modifier.fillMaxWidth().height(110.dp).background(
+                            Brush.linearGradient(listOf(Color(0xFF3A5A6A), Color(0xFF9A8C6A), Color(0xFF2A2A3A)))
+                        ),
+                    ) {
+                        Text(
+                            "This is how subtitles will look",
+                            color = Color.White,
+                            fontFamily = if (sub.serif) SubtitleSerif else null,
+                            fontSize = (15 * sub.size / 100f).sp,
+                            style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = (110 * sub.position / 100f).dp.coerceAtMost(70.dp))
+                                .background(
+                                    when (sub.background) { 1 -> Color(0x601E1E1E); 2 -> Color(0xC8000000); else -> Color.Transparent },
+                                    RoundedCornerShape(6.dp),
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                    Text("Font", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Serif", sub.serif) { store.setSubtitles(sub.copy(serif = true)) }
+                        Pill("Sans", !sub.serif) { store.setSubtitles(sub.copy(serif = false)) }
+                    }
+                    Text("Size", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ActionButton("−", null, false) { store.setSubtitles(sub.copy(size = sub.size - 10)) }
+                        Text("${sub.size}%", fontWeight = FontWeight.Medium)
+                        ActionButton("+", null, false) { store.setSubtitles(sub.copy(size = sub.size + 10)) }
+                    }
+                    Text("Background", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("None", sub.background == 0) { store.setSubtitles(sub.copy(background = 0)) }
+                        Pill("Soft", sub.background == 1) { store.setSubtitles(sub.copy(background = 1)) }
+                        Pill("Dark", sub.background == 2) { store.setSubtitles(sub.copy(background = 2)) }
+                    }
+                    Text("Height on screen", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ActionButton("Lower", null, false) { store.setSubtitles(sub.copy(position = sub.position - 1)) }
+                        Text("${sub.position}% from the bottom", fontWeight = FontWeight.Medium)
+                        ActionButton("Higher", null, false) { store.setSubtitles(sub.copy(position = sub.position + 1)) }
+                    }
+                    Hint("Applies from the next thing you play.")
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.widthIn(max = 900.dp)) {
+                Section("Following") {
+                    val follow by store.follow.collectAsState()
+                    var name by remember { mutableStateOf("") }
+                    Hint("Teams and players to look out for. Home shows a Following row with channels and programmes that mention them. Select a name to remove it.")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (f in follow) Pill("$f  ×", false) { store.setFollow(follow - f) }
+                    }
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it }, label = { Text("Team or player") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    ActionButton("Add", null, true) {
+                        if (name.trim().length >= 3) {
+                            store.setFollow(follow + name.trim()); name = ""
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.widthIn(max = 900.dp)) {
+                Section("Other devices") {
+                    var sharing by remember { mutableStateOf<String?>(null) }
+                    var address by remember { mutableStateOf("") }
+                    var code by remember { mutableStateOf("") }
+                    var status by remember { mutableStateOf<String?>(null) }
+                    val scope = rememberCoroutineScope()
+                    DisposableEffect(Unit) { onDispose { Transfer.stop() } }
+                    Hint("Copies everything (playlist, keys, lists, what you were watching, these settings) to TUTV on another device on the same Wi-Fi. It is a one-time copy, not a live sync.")
+                    Text("1 · On the device that has everything", fontWeight = FontWeight.Bold)
+                    val shared = sharing
+                    if (shared == null) {
+                        ActionButton("Share from this device", null, false) {
+                            val pin = (1000..9999).random().toString()
+                            val ip = Transfer.localAddress()
+                            sharing = if (ip != null && Transfer.start(store.export(), pin)) "$ip|$pin" else "error"
+                        }
+                    } else if (shared == "error") {
+                        Text("Couldn't start sharing. Is this device on Wi-Fi?", color = MaterialTheme.colorScheme.error)
+                        ActionButton("Try again", null, false) { sharing = null }
+                    } else {
+                        Text("Address   ${shared.substringBefore('|')}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Code   ${shared.substringAfter('|')}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Hint("Keep this screen open while the other device copies.")
+                        ActionButton("Stop sharing", null, false) { Transfer.stop(); sharing = null }
+                    }
+                    Text("2 · On the new device", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = address, onValueChange = { address = it }, label = { Text("Address shown on the other device") },
+                        placeholder = { Text("192.168.1.34") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = code, onValueChange = { code = it }, label = { Text("Code") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    ActionButton("Copy to this device", null, true) {
+                        if (address.isNotBlank() && code.isNotBlank()) {
+                            status = "Copying…"
+                            scope.launch {
+                                status = try {
+                                    val json = withContext(Dispatchers.IO) { Transfer.fetch(address, code) }
+                                    withContext(Dispatchers.IO) { store.import(json) }
+                                    restartApp(context)
+                                    "Done. Restarting…"
+                                } catch (e: Exception) {
+                                    "Couldn't copy: ${e.message ?: "no answer"}. Check the address, the code, and that both are on the same Wi-Fi."
+                                }
+                            }
+                        }
+                    }
+                    status?.let { Hint(it) }
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.widthIn(max = 900.dp)) {
                 TmdbAttribution(0.dp)
             }
         }
     }
+}
+
+/** Starts the app again from scratch, so freshly imported settings are read everywhere. */
+private fun restartApp(context: android.content.Context) {
+    val intent = Intent(context, MainActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    context.startActivity(intent)
+    Runtime.getRuntime().exit(0)
 }

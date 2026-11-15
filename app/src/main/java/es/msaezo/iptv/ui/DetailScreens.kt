@@ -76,10 +76,12 @@ import kotlinx.coroutines.delay
  * so white text stays readable however bright the picture is.
  */
 @Composable
-private fun Backdrop(url: String?, preview: Entry?) {
+private fun Backdrop(url: String?, preview: Entry?, wide: Boolean) {
     val previewOn by IptvApp.instance.store.preview.collectAsState()
     if (url == null && (preview == null || !previewOn)) return
-    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+    // On a TV the artwork is a band behind the title, not a full screen: what comes next
+    // (versions, audio, seasons) starts right under the summary.
+    Box(if (wide) Modifier.fillMaxWidth().height(390.dp) else Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
         if (url != null) {
             AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
@@ -187,9 +189,9 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Box {
-                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl, movie.versions.firstOrNull())
+                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl, movie.versions.firstOrNull(), wide)
                 Row(
-                    Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null || previewOn) (if (wide) 120.dp else 80.dp) else 16.dp),
+                    Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null || previewOn) (if (wide) 36.dp else 80.dp) else 16.dp),
                 ) {
                     val poster = meta?.posterUrl ?: movie.poster
                     if (poster != null) {
@@ -339,8 +341,8 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Box {
-                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl, firstEpisode)
-                Row(Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null || (previewOn && firstEpisode != null)) (if (wide) 120.dp else 80.dp) else 16.dp)) {
+                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl, firstEpisode, wide)
+                Row(Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null || (previewOn && firstEpisode != null)) (if (wide) 36.dp else 80.dp) else 16.dp)) {
                     val poster = meta?.posterUrl ?: show.poster
                     if (poster != null) {
                         AsyncImage(

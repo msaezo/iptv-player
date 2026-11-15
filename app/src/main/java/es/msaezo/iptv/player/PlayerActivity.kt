@@ -44,6 +44,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
@@ -68,6 +69,8 @@ object Playback {
         val alternatives: List<Alt> = emptyList(),
         /** Films share one audio / subtitle preference; each series keeps its own. */
         val memoryKey: String? = null,
+        /** Episodes: series + season, under which the intro's position is remembered. */
+        val introKey: String? = null,
     )
 
     data class Alt(val label: String, val url: String)
@@ -99,6 +102,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var playerView: PlayerView
     private lateinit var infoText: TextView
     private lateinit var subtitleText: TextView
+    private lateinit var hintText: TextView
     private val handler = Handler(Looper.getMainLooper())
     private val store get() = IptvApp.instance.store
     private var live = false
@@ -145,7 +149,15 @@ class PlayerActivity : ComponentActivity() {
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
+        // Live TV can be asked to load some seconds ahead before it starts, which rides out
+        // a busy server at the price of a slower start and a picture that far behind live.
+        val ahead = if (live) store.liveBuffer.value * 1000 else 0
+        val loadControl = DefaultLoadControl.Builder().apply {
+            if (ahead > 0) setBufferDurationsMs(maxOf(60_000, ahead * 2), maxOf(90_000, ahead * 3), ahead, ahead)
+        }.build()
+
         player = ExoPlayer.Builder(this, renderers)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http), extractors))
             .setSeekBackIncrementMs(JUMP_MS)
             .setSeekForwardIncrementMs(JUMP_MS)
@@ -185,11 +197,15 @@ class PlayerActivity : ComponentActivity() {
 
         // Subtitles: our own text view, so they can sit on a soft rounded plate, centred.
         val screenShort = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+        val style = store.subtitles.value
         subtitleText = TextView(this).apply {
             setTextColor(Color.WHITE)
-            typeface = runCatching { ResourcesCompat.getFont(this@PlayerActivity, R.font.subtitle_serif) }.getOrNull()
-                ?: Typeface.SERIF
-            setTextSize(TypedValue.COMPLEX_UNIT_PX, screenShort * 0.05f)
+            typeface = if (style.serif) {
+                runCatching { ResourcesCompat.getFont(this@PlayerActivity, R.font.subtitle_serif) }.getOrNull() ?: Typeface.SERIF
+            } else {
+                runCatching { ResourcesCompat.getFont(this@PlayerActivity, R.font.inter_medium) }.getOrNull() ?: Typeface.SANS_SERIF
+            }
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, screenShort * 0.05f * style.size / 100f)
             gravity = Gravity.CENTER
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             includeFontPadding = false
@@ -197,12 +213,21 @@ class PlayerActivity : ComponentActivity() {
             val h = (screenShort * 0.022f).toInt()
             val v = (screenShort * 0.010f).toInt()
             setPadding(h, v, h, v)
-            background = GradientDrawable().apply {
-                setColor(Color.argb(96, 30, 30, 30))
-                cornerRadius = screenShort * 0.014f
+            if (style.background > 0) {
+                background = GradientDrawable().apply {
+                    setColor(if (style.background == 1) Color.argb(96, 30, 30, 30) else Color.argb(200, 0, 0, 0))
+                    cornerRadius = screenShort * 0.014f
+                }
             }
-            setShadowLayer(screenShort * 0.004f, 0f, screenShort * 0.0015f, Color.argb(200, 0, 0, 0))
+            setShadowLayer(screenShort * 0.004f, 0f, screenShort * 0.0015f, Color.argb(220, 0, 0, 0))
             maxWidth = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.8f).toInt()
+            visibility = View.GONE
+        }
+        hintText = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            background = GradientDrawable().apply { setColor(Color.argb(190, 0, 0, 0)); setStroke(dp(1), Color.argb(120, 255, 255, 255)) }
             visibility = View.GONE
         }
         // Lift the subtitles above the playback controls while those are showing.
@@ -223,7 +248,10 @@ class PlayerActivity : ComponentActivity() {
             setBackgroundColor(Color.BLACK)
             addView(playerView, FrameLayout.LayoutParams(-1, -1))
             addView(subtitleText, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                bottomMargin = (screenShort * 0.07f).toInt()
+                bottomMargin = (screenShort * style.position / 100f).toInt()
+            })
+            addView(hintText, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
+                setMargins(0, 0, dp(40), (screenShort * 0.20f).toInt())
             })
             addView(infoText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
                 setMargins(dp(32), dp(24), 0, 0)
@@ -298,6 +326,7 @@ class PlayerActivity : ComponentActivity() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 if (!live) {
+                    introStartMark = -1
                     Playback.moveTo(player.currentMediaItemIndex)
                     showOverlay(Playback.queue[player.currentMediaItemIndex].let { it.subtitle ?: it.title })
                 }
@@ -305,7 +334,7 @@ class PlayerActivity : ComponentActivity() {
         })
 
         if (live) {
-            playLive(Playback.index)
+            playLive(Playback.index, immediate = true)
         } else {
             val items = queue.map { toMediaItem(it) }
             player.setMediaItems(items, Playback.index, first.startPositionMs.coerceAtLeast(0))
@@ -333,13 +362,28 @@ class PlayerActivity : ComponentActivity() {
             .build()
     }
 
-    private fun playLive(index: Int) {
+    private val startLiveRunnable = Runnable { startLive() }
+
+    /**
+     * Changes channel. The old stream is closed first and the new one starts a moment later:
+     * providers that allow a single connection refuse a channel opened while the previous
+     * one is still streaming, and it also means only the last channel loads when zapping fast.
+     */
+    private fun playLive(index: Int, immediate: Boolean = false) {
         val q = Playback.queue
         val i = ((index % q.size) + q.size) % q.size
         Playback.moveTo(i)
         liveAlt = 0
         store.addRecentLive(q[i].url)
-        startLive()
+        handler.removeCallbacks(startLiveRunnable)
+        if (immediate) {
+            startLive()
+        } else {
+            player.stop()
+            player.clearMediaItems()
+            showOverlay("${i + 1}  ${q[i].title}")
+            handler.postDelayed(startLiveRunnable, ZAP_DELAY_MS)
+        }
     }
 
     /** (Re)starts the current live channel in the quality chosen by [liveAlt]. */
@@ -442,6 +486,77 @@ class PlayerActivity : ComponentActivity() {
         )
     }
 
+    // --- skip intro / next episode (the ☰ menu button) -----------------------------------
+
+    private enum class Hint { NONE, NEXT, SKIP, MARK_END, TEACH }
+    private var hint = Hint.NONE
+    private var introStartMark = -1L
+
+    private val hintTicker = object : Runnable {
+        override fun run() {
+            updateHint()
+            handler.postDelayed(this, 500)
+        }
+    }
+
+    private fun currentItem(): Playback.Item? = Playback.queue.getOrNull(Playback.index)
+
+    private fun updateHint() {
+        if (live || !::player.isInitialized) return
+        val item = currentItem()
+        val pos = player.currentPosition
+        val dur = player.duration
+        val marks = item?.introKey?.let { store.introMark(it) }
+        val menu = "\u2630"
+        val (state, text) = when {
+            dur > 0 && player.hasNextMediaItem() && dur - pos in 1L..60_000L ->
+                Hint.NEXT to "Next episode   $menu"
+            marks != null && pos >= marks.first - 2_000 && pos < marks.second - 2_000 ->
+                Hint.SKIP to "Skip intro   $menu"
+            item?.introKey != null && introStartMark >= 0 ->
+                Hint.MARK_END to "Press $menu again when the intro ends"
+            item?.introKey != null && marks == null && pos in 3_000L..25_000L ->
+                Hint.TEACH to "Press $menu when the intro starts to skip it next time"
+            else -> Hint.NONE to ""
+        }
+        hint = state
+        if (state == Hint.NONE) {
+            hintText.visibility = View.GONE
+        } else {
+            hintText.text = text
+            hintText.visibility = View.VISIBLE
+        }
+    }
+
+    /** ☰ on the remote: next episode, skip the intro, or teach where the intro is. */
+    private fun onMenuKey(): Boolean {
+        if (live) return false
+        val item = currentItem() ?: return false
+        val pos = player.currentPosition
+        when (hint) {
+            Hint.NEXT -> player.seekToNextMediaItem()
+            Hint.SKIP -> item.introKey?.let { store.introMark(it) }?.let { player.seekTo(it.second) }
+            Hint.MARK_END -> {
+                val key = item.introKey ?: return false
+                val length = pos - introStartMark
+                if (length in 5_000L..300_000L) {
+                    store.setIntroMark(key, introStartMark, pos)
+                    showOverlay("Intro saved for this season")
+                } else {
+                    showOverlay("That doesn't look like an intro, try again")
+                }
+                introStartMark = -1
+            }
+            else -> {
+                // Anywhere in the first 15 minutes: (re)teach where this season's intro starts.
+                if (item.introKey == null || pos > 15 * 60_000) return false
+                introStartMark = pos
+            }
+        }
+        updateHint()
+        return true
+    }
+
     private var centerHandled = false
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -487,6 +602,10 @@ class PlayerActivity : ComponentActivity() {
                 } else if (switchQuality(1)) return true
             }
         }
+        if (event.keyCode == KeyEvent.KEYCODE_MENU) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && onMenuKey()) return true
+            if (event.action == KeyEvent.ACTION_UP && !live) return true
+        }
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK &&
             playerView.isControllerFullyVisible
         ) {
@@ -508,12 +627,14 @@ class PlayerActivity : ComponentActivity() {
         if (::player.isInitialized) {
             player.playWhenReady = true
             handler.post(saveTicker)
+            handler.post(hintTicker)
         }
     }
 
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(saveTicker)
+        handler.removeCallbacks(hintTicker)
         if (::player.isInitialized) {
             saveProgress()
             player.playWhenReady = false
@@ -545,6 +666,7 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         /** Size of one jump back / forward. */
         const val JUMP_MS = 60_000L
+        private const val ZAP_DELAY_MS = 600L
 
         fun formatTime(ms: Long): String {
             val s = ms / 1000
