@@ -1,0 +1,152 @@
+package es.msaezo.iptv.data
+
+import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
+
+data class Progress(val position: Long, val duration: Long, val updatedAt: Long) {
+    val fraction: Float get() = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val finished: Boolean get() = duration > 0 && position >= duration * 0.92
+    val inProgress: Boolean get() = position > 30_000 && !finished
+}
+
+/** Settings and personal data (favorites, watch progress), persisted in SharedPreferences. */
+class UserStore(context: Context) {
+
+    private val prefs = context.getSharedPreferences("iptv", Context.MODE_PRIVATE)
+
+    private val _playlistUrl = MutableStateFlow(prefs.getString("playlistUrl", "") ?: "")
+    val playlistUrl: StateFlow<String> = _playlistUrl.asStateFlow()
+
+    private val _languages = MutableStateFlow(
+        prefs.getStringSet("languages", null)?.toSet() ?: LibraryFilter.DEFAULT_LANGUAGES
+    )
+    val languages: StateFlow<Set<String>> = _languages.asStateFlow()
+
+    private val _tmdbKey = MutableStateFlow(prefs.getString("tmdbKey", "") ?: "")
+    val tmdbKey: StateFlow<String> = _tmdbKey.asStateFlow()
+
+    private val _omdbKey = MutableStateFlow(prefs.getString("omdbKey", "") ?: "")
+    val omdbKey: StateFlow<String> = _omdbKey.asStateFlow()
+
+    private val _userAgent = MutableStateFlow(prefs.getString("userAgent", DEFAULT_UA) ?: DEFAULT_UA)
+    val userAgent: StateFlow<String> = _userAgent.asStateFlow()
+
+    private val _favorites = MutableStateFlow(prefs.getStringSet("favorites", emptySet())!!.toSet())
+    val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
+
+    private val _progress = MutableStateFlow(loadProgress())
+    val progress: StateFlow<Map<String, Progress>> = _progress.asStateFlow()
+
+    private val _recentLive = MutableStateFlow(loadList("recentLive"))
+    val recentLive: StateFlow<List<String>> = _recentLive.asStateFlow()
+
+    private val _showLanguage = MutableStateFlow(loadMap("showLanguage"))
+    val showLanguage: StateFlow<Map<String, String>> = _showLanguage.asStateFlow()
+
+    fun setPlaylistUrl(url: String) {
+        _playlistUrl.value = url.trim()
+        prefs.edit().putString("playlistUrl", url.trim()).apply()
+    }
+
+    fun setLanguages(langs: Set<String>) {
+        _languages.value = langs
+        prefs.edit().putStringSet("languages", langs).apply()
+    }
+
+    fun setTmdbKey(k: String) {
+        _tmdbKey.value = k.trim(); prefs.edit().putString("tmdbKey", k.trim()).apply()
+    }
+
+    fun setOmdbKey(k: String) {
+        _omdbKey.value = k.trim(); prefs.edit().putString("omdbKey", k.trim()).apply()
+    }
+
+    fun setUserAgent(ua: String) {
+        val v = ua.trim().ifEmpty { DEFAULT_UA }
+        _userAgent.value = v; prefs.edit().putString("userAgent", v).apply()
+    }
+
+    // --- favorites: "m:<movieId>", "s:<showId>", "l:<url>" -------------------------------
+
+    fun isFavorite(key: String) = key in _favorites.value
+
+    fun toggleFavorite(key: String) {
+        val s = _favorites.value.toMutableSet()
+        if (!s.remove(key)) s.add(key)
+        _favorites.value = s
+        prefs.edit().putStringSet("favorites", s).apply()
+    }
+
+    // --- progress -----------------------------------------------------------------------
+
+    fun saveProgress(url: String, position: Long, duration: Long) {
+        if (duration <= 0) return
+        val m = _progress.value.toMutableMap()
+        m[url] = Progress(position, duration, System.currentTimeMillis())
+        // keep the map bounded
+        if (m.size > 2000) {
+            m.entries.sortedBy { it.value.updatedAt }.take(m.size - 2000).forEach { m.remove(it.key) }
+        }
+        _progress.value = m
+        val json = JSONObject()
+        for ((k, p) in m) json.put(k, JSONArray().put(p.position).put(p.duration).put(p.updatedAt))
+        prefs.edit().putString("progress", json.toString()).apply()
+    }
+
+    fun clearHistory() {
+        _progress.value = emptyMap()
+        _recentLive.value = emptyList()
+        prefs.edit().remove("progress").remove("recentLive").apply()
+    }
+
+    private fun loadProgress(): Map<String, Progress> {
+        val raw = prefs.getString("progress", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            buildMap {
+                for (k in o.keys()) {
+                    val a = o.getJSONArray(k)
+                    put(k, Progress(a.getLong(0), a.getLong(1), a.getLong(2)))
+                }
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    // --- recents / per-show language ----------------------------------------------------
+
+    fun addRecentLive(url: String) {
+        val l = (listOf(url) + _recentLive.value.filter { it != url }).take(30)
+        _recentLive.value = l
+        prefs.edit().putString("recentLive", JSONArray(l).toString()).apply()
+    }
+
+    fun setShowLanguage(showId: String, lang: String) {
+        val m = _showLanguage.value + (showId to lang)
+        _showLanguage.value = m
+        prefs.edit().putString("showLanguage", JSONObject(m as Map<*, *>).toString()).apply()
+    }
+
+    private fun loadList(key: String): List<String> = try {
+        val a = JSONArray(prefs.getString(key, "[]"))
+        List(a.length()) { a.getString(it) }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    private fun loadMap(key: String): Map<String, String> = try {
+        val o = JSONObject(prefs.getString(key, "{}") ?: "{}")
+        buildMap { for (k in o.keys()) put(k, o.getString(k)) }
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
+    companion object {
+        const val DEFAULT_UA = "VLC/3.0.20 LibVLC/3.0.20"
+    }
+}
