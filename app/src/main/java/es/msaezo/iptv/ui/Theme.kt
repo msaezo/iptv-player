@@ -7,36 +7,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-val Accent = Color(0xFF5EE6D0)
-val Accent2 = Color(0xFFB18CFF)
+/** TUTV brand red (our own shade). */
+val Brand = Color(0xFFE8384F)
+val Bg = Color(0xFF0A0A0A)
+val Muted = Color(0xFFB3B3B3)
+val Accent = Color(0xFF3FB8E8)
 val Tomato = Color(0xFFFA320A)
 val Gold = Color(0xFFF5C518)
 
 private val scheme = darkColorScheme(
-    primary = Accent,
-    onPrimary = Color(0xFF00201B),
-    secondary = Accent2,
-    background = Color(0xFF0B1116),
-    surface = Color(0xFF131C23),
-    surfaceVariant = Color(0xFF1E2A33),
-    onSurface = Color(0xFFE8EEF2),
-    onSurfaceVariant = Color(0xFFAAB7C0),
+    primary = Brand,
+    onPrimary = Color.White,
+    secondary = Color.White,
+    background = Bg,
+    surface = Color(0xFF161616),
+    surfaceVariant = Color(0xFF232323),
+    onSurface = Color.White,
+    onSurfaceVariant = Muted,
+    error = Color(0xFFFF6B6B),
 )
 
 @Composable
 fun IptvTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF0E3B43), Color(0xFF101820), Color(0xFF241A3A)),
-                    )
-                )
-        ) { content() }
+        Box(Modifier.fillMaxSize().background(Bg)) { content() }
     }
 }

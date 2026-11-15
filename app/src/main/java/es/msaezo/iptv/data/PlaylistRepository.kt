@@ -88,7 +88,7 @@ class PlaylistRepository(
         // Plain M3U playlist (or fallback when the Xtream API isn't available).
         try {
             if (force || !cacheFile.exists() || cacheFile.length() == 0L) {
-                _state.value = State.Loading("Downloading playlist…")
+                _state.value = State.Loading("Updating catalogue…")
                 fetch(url, cacheFile)
             }
             _state.value = State.Loading("Reading playlist…")
@@ -153,7 +153,7 @@ class PlaylistRepository(
             }
         } else {
             Http.download(url, dest, store.userAgent.value) { mb ->
-                _state.value = State.Loading("Downloading playlist… $mb MB")
+                _state.value = State.Loading("Updating catalogue… $mb MB")
             }
         }
     }

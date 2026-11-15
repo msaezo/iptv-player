@@ -1,6 +1,12 @@
 package es.msaezo.iptv.ui
 
 import android.content.pm.PackageManager
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.animation.core.animateDpAsState
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -47,7 +53,6 @@ import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.R
 import es.msaezo.iptv.data.PlaylistRepository
 import kotlinx.coroutines.delay
-import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,15 +74,15 @@ fun MainScreen() {
     BackHandler(enabled = nav.stack.isNotEmpty() || nav.tab != Tab.HOME) { nav.back() }
 
     if (wide) {
-        Column(Modifier.fillMaxSize()) {
-            TopNav(nav, focusOnStart = isTv)
-            Box(Modifier.weight(1f).fillMaxWidth()) { Content(nav, wide, state) }
+        Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().padding(start = RAIL_WIDTH)) { Content(nav, wide, state) }
+            SideRail(nav, focusOnStart = isTv)
         }
     } else {
         Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
-                NavigationBar(containerColor = Color(0xF20B1116)) {
+                NavigationBar(containerColor = Color(0xFA0A0A0A), tonalElevation = 0.dp) {
                     for (t in Tab.entries) {
                         NavigationBarItem(
                             selected = nav.tab == t && nav.stack.isEmpty(),
@@ -86,7 +91,11 @@ fun MainScreen() {
                             label = { Text(t.label, maxLines = 1) },
                             alwaysShowLabel = false,
                             colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                selectedIconColor = Color.White,
+                                selectedTextColor = Color.White,
+                                unselectedIconColor = Color(0xFF8C8C8C),
+                                unselectedTextColor = Color(0xFF8C8C8C),
+                                indicatorColor = Color.Transparent,
                             ),
                         )
                     }
@@ -98,65 +107,76 @@ fun MainScreen() {
     }
 }
 
-private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-    in 0..5 -> "Hey night-owl"
-    in 6..11 -> "Good morning"
-    in 12..19 -> "Good afternoon"
-    else -> "Good evening"
-}
+private val RAIL_WIDTH = 84.dp
 
+/** TV side menu: icons only; expands with labels over the content while focused. */
 @Composable
-private fun TopNav(nav: Nav, focusOnStart: Boolean) {
+private fun SideRail(nav: Nav, focusOnStart: Boolean) {
+    var expanded by remember { mutableStateOf(false) }
+    val width by animateDpAsState(if (expanded) 250.dp else RAIL_WIDTH, label = "rail")
     val homeFocus = remember { FocusRequester() }
     if (focusOnStart) {
+        // Give the menu focus first; the home hero then moves it to its Play button.
         LaunchedEffect(Unit) {
-            delay(400)
+            delay(300)
             runCatching { homeFocus.requestFocus() }
         }
     }
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.width(220.dp)) {
-            Image(
-                painterResource(R.drawable.logo_wordmark), contentDescription = "TUTV",
-                modifier = Modifier.height(30.dp),
+    Column(
+        Modifier
+            .fillMaxHeight()
+            .width(width)
+            .background(
+                if (expanded) Brush.horizontalGradient(listOf(Color(0xF5000000), Color(0xE6000000), Color(0x00000000)))
+                else Brush.horizontalGradient(listOf(Color(0xFF000000), Color(0xCC000000)))
             )
-            Text(greeting(), style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(Modifier.weight(1f))
-        Row(
-            Modifier
-                .background(Color(0x22FFFFFF), RoundedCornerShape(50))
-                .padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            for (t in Tab.entries) {
-                val selected = nav.tab == t
-                Row(
-                    Modifier
-                        .then(if (t == Tab.HOME) Modifier.focusRequester(homeFocus) else Modifier)
-                        .tvClickable(RoundedCornerShape(50), 1.06f) { nav.select(t) }
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else Color.Transparent,
-                            RoundedCornerShape(50),
-                        )
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(t.icon, null, Modifier.size(18.dp))
-                    if (t != Tab.SEARCH && t != Tab.SETTINGS) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(t.label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
+            .onFocusChanged { expanded = it.hasFocus }
+            .padding(vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.padding(start = 22.dp, bottom = 28.dp).height(40.dp), contentAlignment = Alignment.CenterStart) {
+            if (expanded) {
+                Image(painterResource(R.drawable.logo_wordmark), "TUTV", Modifier.height(26.dp))
+            } else {
+                Image(painterResource(R.mipmap.ic_launcher), "TUTV", Modifier.size(40.dp))
             }
         }
+        val order = listOf(Tab.SEARCH, Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.LIVE)
+        for (t in order) RailItem(t, nav, expanded, if (t == Tab.HOME) homeFocus else null)
         Spacer(Modifier.weight(1f))
-        Spacer(Modifier.width(220.dp))
+        RailItem(Tab.SETTINGS, nav, expanded, null)
+    }
+}
+
+@Composable
+private fun RailItem(t: Tab, nav: Nav, expanded: Boolean, focus: FocusRequester?) {
+    val selected = nav.tab == t
+    Row(
+        Modifier
+            .padding(horizontal = 12.dp)
+            .fillMaxWidth()
+            .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
+            .tvClickable(RoundedCornerShape(8.dp), 1.03f) { nav.select(t) }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            t.icon, t.label, Modifier.size(26.dp),
+            tint = if (selected) Color.White else Color(0xFF9A9A9A),
+        )
+        if (expanded) {
+            Spacer(Modifier.width(18.dp))
+            Text(
+                t.label,
+                color = if (selected) Color.White else Color(0xFFBDBDBD),
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        if (selected) {
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.size(width = 4.dp, height = 22.dp).background(Brand, RoundedCornerShape(2.dp)))
+        }
     }
 }
 
@@ -186,6 +206,7 @@ private fun Content(nav: Nav, wide: Boolean, state: PlaylistRepository.State) {
                 is Route.MovieDetail -> MovieDetailScreen(route.id, v, nav, wide)
                 is Route.ShowDetail -> ShowDetailScreen(route.id, v, nav, wide)
                 is Route.CollectionRoute -> CollectionScreen(route.key, nav, wide)
+                is Route.CategoryRoute -> CategoryScreen(route, v, nav, wide)
                 null -> when (nav.tab) {
                     Tab.HOME -> HomeScreen(v, nav, wide)
                     Tab.MOVIES -> MoviesScreen(v, nav, wide)

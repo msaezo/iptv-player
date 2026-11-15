@@ -89,9 +89,9 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             progress("Signing in…")
             checkLogin(acc)
             for ((i, action) in ACTIONS.withIndex()) {
-                progress("Downloading ${LABELS[i]}…")
+                progress("Updating catalogue: ${LABELS[i]}…")
                 Http.download(acc.api(action), File(cacheDir, "xt_$action.json"), userAgent()) { mb ->
-                    progress("Downloading ${LABELS[i]}… $mb MB")
+                    progress("Updating catalogue: ${LABELS[i]}… $mb MB")
                 }
             }
             stamp.writeText(accountKey)
@@ -207,7 +207,7 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
         )
         private val LABELS = listOf(
             "live categories", "movie categories", "series categories",
-            "live channels", "movies", "series",
+            "channel list", "movie list", "series list",
         )
 
         fun parseRating(s: String?): Double? =

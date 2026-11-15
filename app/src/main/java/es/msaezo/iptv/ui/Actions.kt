@@ -2,7 +2,6 @@ package es.msaezo.iptv.ui
 
 import android.content.Context
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
@@ -38,6 +37,7 @@ sealed interface Route {
     data class MovieDetail(val id: String) : Route
     data class ShowDetail(val id: String) : Route
     data class CollectionRoute(val key: String) : Route
+    data class CategoryRoute(val series: Boolean, val name: String) : Route
 }
 
 /** Minimal navigation: a selected tab plus a stack of detail screens. */
@@ -50,10 +50,10 @@ class Nav {
     var liveCategory by mutableIntStateOf(0)
     var searchQuery by mutableStateOf("")
 
-    val movieGrid = LazyGridState()
-    val showGrid = LazyGridState()
+    val movieRows = LazyListState()
+    val showRows = LazyListState()
     val liveList = LazyListState()
-    val homeGrid = LazyGridState()
+    val homeList = LazyListState()
 
     fun select(t: Tab) {
         stack.clear(); tab = t

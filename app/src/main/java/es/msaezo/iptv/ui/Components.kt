@@ -99,7 +99,7 @@ fun LanguagePills(langs: List<String>, modifier: Modifier = Modifier) {
                 Tags.shortLabel(it),
                 color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier
-                    .background(Color(0xCC0E3B43), RoundedCornerShape(4.dp))
+                    .background(Color(0xCC000000), RoundedCornerShape(4.dp))
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
@@ -143,8 +143,8 @@ fun PosterCard(
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color(0x66000000),
+                    color = Brand,
+                    trackColor = Color(0x88555555),
                 )
             }
         }
@@ -246,16 +246,72 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
         text,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        color = if (selected) Color.Black else Color.White,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         modifier = Modifier
-            .tvClickable(RoundedCornerShape(50), 1.04f, onClick)
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary else Color(0x33FFFFFF),
-                RoundedCornerShape(50),
-            )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .tvClickable(RoundedCornerShape(50), 1.06f, onClick)
+            .background(if (selected) Color.White else Color(0x26FFFFFF), RoundedCornerShape(50))
+            .border(1.dp, if (selected) Color.White else Color(0x55FFFFFF), RoundedCornerShape(50))
+            .padding(horizontal = 16.dp, vertical = 7.dp),
     )
+}
+
+/** 16:9 artwork card (Netflix-style rows). */
+@Composable
+fun LandscapeCard(
+    title: String,
+    image: String?,
+    vote: Double,
+    progress: Float?,
+    width: Dp,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .width(width)
+            .aspectRatio(16f / 9f)
+            .tvClickable(RoundedCornerShape(8.dp), 1.08f, onClick)
+            .background(Color(0xFF222222))
+    ) {
+        if (image != null) {
+            AsyncImage(image, title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xE6000000))
+            )
+        )
+        Text(
+            title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
+        )
+        RatingBadge(vote, Modifier.align(Alignment.TopEnd).padding(6.dp))
+        if (progress != null && progress > 0f) {
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
+                color = Brand,
+                trackColor = Color(0x88555555),
+            )
+        }
+    }
+}
+
+/** Last card of a row: opens the full list. */
+@Composable
+fun SeeAllCard(width: Dp, ratio: Float, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .width(width)
+            .aspectRatio(ratio)
+            .tvClickable(RoundedCornerShape(8.dp), 1.08f, onClick)
+            .background(Color(0xFF1C1C1C))
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("See all ›", color = Color.White, fontWeight = FontWeight.Bold)
+    }
 }
 
 /**
@@ -290,7 +346,7 @@ fun <T> CategoryLayout(
                             .padding(horizontal = 8.dp)
                             .tvClickable(RoundedCornerShape(10.dp), 1.02f) { onSelect(i) }
                             .background(
-                                if (isSel) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.Transparent,
+                                if (isSel) Color(0x2EFFFFFF) else Color.Transparent,
                                 RoundedCornerShape(10.dp),
                             )
                             .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -323,12 +379,28 @@ fun <T> CategoryLayout(
 }
 
 @Composable
-fun <T> PosterRow(title: String, list: List<T>, card: @Composable (T) -> Unit) {
+fun <T> PosterRow(
+    title: String,
+    list: List<T>,
+    startPadding: Dp = 4.dp,
+    onSeeAll: (() -> Unit)? = null,
+    seeAllWidth: Dp = 140.dp,
+    seeAllRatio: Float = 2f / 3f,
+    card: @Composable (T) -> Unit,
+) {
     if (list.isEmpty()) return
     Column {
-        SectionTitle(title, Modifier.padding(horizontal = 4.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(4.dp)) {
+        Text(
+            title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+            color = Color(0xFFE5E5E5),
+            modifier = Modifier.padding(start = startPadding, top = 14.dp, bottom = 6.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = startPadding, end = startPadding, top = 8.dp, bottom = 8.dp),
+        ) {
             items(list) { card(it) }
+            if (onSeeAll != null) item { SeeAllCard(seeAllWidth, seeAllRatio, onSeeAll) }
         }
     }
 }

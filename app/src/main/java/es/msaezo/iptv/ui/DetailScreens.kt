@@ -71,7 +71,7 @@ private fun Backdrop(url: String?) {
         AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0x66000000), Color(0xFF0B1116)))
+                Brush.verticalGradient(listOf(Color(0x33000000), Bg))
             )
         )
     }
@@ -87,15 +87,15 @@ fun ActionButton(
 ) {
     Row(
         modifier
-            .tvClickable(RoundedCornerShape(50), 1.06f, onClick)
+            .tvClickable(RoundedCornerShape(6.dp), 1.06f, onClick)
             .background(
-                if (primary) MaterialTheme.colorScheme.primary else Color(0x33FFFFFF),
-                RoundedCornerShape(50),
+                if (primary) Color.White else Color(0x66808080),
+                RoundedCornerShape(6.dp),
             )
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 22.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val color = if (primary) MaterialTheme.colorScheme.onPrimary else Color.White
+        val color = if (primary) Color.Black else Color.White
         if (icon != null) {
             Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
@@ -215,7 +215,7 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                         Column(
                             Modifier
                                 .tvClickable(RoundedCornerShape(12.dp), 1.04f) { Actions.playMovie(context, movie, v) }
-                                .background(Color(0x22FFFFFF), RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1C1C1C), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
                             Text(
@@ -366,7 +366,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                     .padding(horizontal = pad, vertical = 4.dp)
                     .fillMaxWidth()
                     .tvClickable(RoundedCornerShape(12.dp), 1.015f) { Actions.playEpisode(context, show, ep, language) }
-                    .background(Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
+                    .background(Color(0xFF181818), RoundedCornerShape(10.dp))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
