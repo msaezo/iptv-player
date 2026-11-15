@@ -77,14 +77,14 @@ class PlayerActivity : ComponentActivity() {
 
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
-    private lateinit var overlay: TextView
+    private lateinit var infoText: TextView
     private val handler = Handler(Looper.getMainLooper())
     private val store get() = IptvApp.instance.store
     private var live = false
     private var liveRetries = 0
     private var errorDialog: AlertDialog? = null
 
-    private val hideOverlay = Runnable { overlay.visibility = View.GONE }
+    private val hideOverlay = Runnable { infoText.visibility = View.GONE }
     private val saveTicker = object : Runnable {
         override fun run() {
             saveProgress()
@@ -142,7 +142,7 @@ class PlayerActivity : ComponentActivity() {
             setShowNextButton(!live && queue.size > 1)
             setShowPreviousButton(!live && queue.size > 1)
         }
-        overlay = TextView(this).apply {
+        infoText = TextView(this).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setPadding(dp(18), dp(10), dp(18), dp(10))
@@ -154,7 +154,7 @@ class PlayerActivity : ComponentActivity() {
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(playerView, FrameLayout.LayoutParams(-1, -1))
-            addView(overlay, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
+            addView(infoText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
                 setMargins(dp(32), dp(24), 0, 0)
             })
         }
@@ -227,8 +227,8 @@ class PlayerActivity : ComponentActivity() {
         else player.currentMediaItem?.mediaId ?: Playback.queue[Playback.index].url
 
     private fun showOverlay(text: String) {
-        overlay.text = text
-        overlay.visibility = View.VISIBLE
+        infoText.text = text
+        infoText.visibility = View.VISIBLE
         handler.removeCallbacks(hideOverlay)
         handler.postDelayed(hideOverlay, 3500)
     }
