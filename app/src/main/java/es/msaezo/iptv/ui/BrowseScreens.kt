@@ -20,6 +20,23 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.TwoWheeler
+import androidx.compose.material.icons.filled.SportsMotorsports
+import androidx.compose.material.icons.filled.SportsBasketball
+import androidx.compose.material.icons.filled.SportsTennis
+import androidx.compose.material.icons.filled.SportsSoccer
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.ui.graphics.vector.ImageVector
 import es.msaezo.iptv.IptvApp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyRow
@@ -107,21 +125,13 @@ fun smartShowRows(view: LibraryView, collections: List<ResolvedCollection>): Lis
 }
 
 @Composable
-private fun PackHeader(pad: androidx.compose.ui.unit.Dp) {
-    Text(
-        "FROM YOUR PROVIDER", color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = pad, top = 28.dp),
-    )
-}
-
-@Composable
 fun MoviesScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val known by IptvApp.instance.meta.known.collectAsState()
     val collections by IptvApp.instance.meta.collections.collectAsState()
     val progress by IptvApp.instance.store.progress.collectAsState()
-    val smart = remember(view, collections) { smartMovieRows(view, collections) }
-    val packs = remember(view) { view.movieCategories.filter { it.name != LibraryView.ALL } }
+    val smart = remember(view, collections) {
+        smartMovieRows(view, collections).ifEmpty { view.movieCategories.filter { it.name != LibraryView.ALL } }
+    }
     val pad = if (wide) 48.dp else 12.dp
     val w = if (wide) 150.dp else 108.dp
     if (view.movies.isEmpty()) {
@@ -139,14 +149,6 @@ fun MoviesScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                 MovieCard(m, known[m.id], p?.takeIf { it.inProgress }?.fraction, w) { nav.open(Route.MovieDetail(m.id)) }
             }
         }
-        if (packs.isNotEmpty()) item { PackHeader(pad) }
-        items(packs, key = { "m:" + it.name }) { cat ->
-            PosterRow(
-                cat.name, cat.items.take(ROW_ITEMS), pad,
-                onSeeAll = if (cat.items.size > ROW_ITEMS) ({ nav.open(Route.CategoryRoute(false, cat.name)) }) else null,
-                seeAllWidth = w,
-            ) { m -> MovieCard(m, known[m.id], null, w) { nav.open(Route.MovieDetail(m.id)) } }
-        }
     }
 }
 
@@ -154,8 +156,9 @@ fun MoviesScreen(view: LibraryView, nav: Nav, wide: Boolean) {
 fun SeriesScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val known by IptvApp.instance.meta.known.collectAsState()
     val collections by IptvApp.instance.meta.collections.collectAsState()
-    val smart = remember(view, collections) { smartShowRows(view, collections) }
-    val packs = remember(view) { view.showCategories.filter { it.name != LibraryView.ALL } }
+    val smart = remember(view, collections) {
+        smartShowRows(view, collections).ifEmpty { view.showCategories.filter { it.name != LibraryView.ALL } }
+    }
     val pad = if (wide) 48.dp else 12.dp
     val w = if (wide) 150.dp else 108.dp
     if (view.shows.isEmpty()) {
@@ -167,14 +170,6 @@ fun SeriesScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             PosterRow(
                 row.name, row.items.take(ROW_ITEMS), pad,
                 onSeeAll = if (row.items.size > ROW_ITEMS) ({ nav.openList(row.name, row.items) }) else null,
-                seeAllWidth = w,
-            ) { s -> ShowCard(s, known[s.id], w) { nav.open(Route.ShowDetail(s.id)) } }
-        }
-        if (packs.isNotEmpty()) item { PackHeader(pad) }
-        items(packs, key = { "s:" + it.name }) { cat ->
-            PosterRow(
-                cat.name, cat.items.take(ROW_ITEMS), pad,
-                onSeeAll = if (cat.items.size > ROW_ITEMS) ({ nav.open(Route.CategoryRoute(true, cat.name)) }) else null,
                 seeAllWidth = w,
             ) { s -> ShowCard(s, known[s.id], w) { nav.open(Route.ShowDetail(s.id)) } }
         }
@@ -288,7 +283,7 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val scope = rememberCoroutineScope()
     CategoryLayout(menu, nav.liveCategory, {
         nav.liveCategory = it; nav.liveFilter = 0; scope.launch { nav.liveList.scrollToItem(0) }
-    }, wide) { cat ->
+    }, wide, icon = ::liveIcon, badge = ::liveBadge) { cat ->
         val section = sections.firstOrNull { it.name == cat.name } ?: return@CategoryLayout
         val filter = section.filters[nav.liveFilter.coerceIn(0, section.filters.size - 1)]
         Column(Modifier.fillMaxSize()) {
@@ -298,7 +293,7 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     itemsIndexed(section.filters) { i, f ->
-                        Pill("${f.name}  ${f.items.size}", i == nav.liveFilter) {
+                        Pill("${f.name}  ${f.items.size}", i == nav.liveFilter, liveIcon(f.name)) {
                             nav.liveFilter = i; scope.launch { nav.liveList.scrollToItem(0) }
                         }
                     }
@@ -318,6 +313,37 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             }
         }
     }
+}
+
+/** Icon for a Live TV section, sport or kind of channel. */
+fun liveIcon(name: String): ImageVector? = when (name) {
+    "★ Favorites" -> Icons.Filled.Star
+    "Recently watched" -> Icons.Filled.History
+    "Sports", "Other sports" -> Icons.Filled.EmojiEvents
+    "Events", "Announced" -> Icons.Filled.Event
+    "Football" -> Icons.Filled.SportsSoccer
+    "Tennis" -> Icons.Filled.SportsTennis
+    "Basketball" -> Icons.Filled.SportsBasketball
+    "Formula 1" -> Icons.Filled.SportsMotorsports
+    "Motorbikes" -> Icons.Filled.TwoWheeler
+    "International" -> Icons.Filled.Public
+    "Provider packs" -> Icons.Filled.Folder
+    "General" -> Icons.Filled.Tv
+    "Movies & Series" -> Icons.Filled.Movie
+    "Kids" -> Icons.Filled.ChildCare
+    "News" -> Icons.Filled.Article
+    "Documentaries" -> Icons.Filled.Explore
+    "Music" -> Icons.Filled.MusicNote
+    "Adults" -> Icons.Filled.Lock
+    else -> null
+}
+
+/** Countries get a two-letter mark instead of an icon. */
+fun liveBadge(name: String): String? = when (name) {
+    "Spain" -> "ES"
+    "UK" -> "UK"
+    "USA" -> "US"
+    else -> null
 }
 
 private val clock = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT)
@@ -342,6 +368,7 @@ fun ChannelRow(
         Row(
             Modifier
                 .weight(1f)
+                .focusMemory("ch|${ch.id}")
                 .tvClickable(Square, 1.015f, onClick)
                 .background(Color(0xFF161616), Square)
                 .padding(horizontal = 12.dp, vertical = 8.dp),

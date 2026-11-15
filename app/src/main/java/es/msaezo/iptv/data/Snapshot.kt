@@ -18,7 +18,7 @@ class Snapshot(
     val series: List<SeriesSource>,
 ) {
     companion object {
-        private const val VERSION = 0x54555603
+        private const val VERSION = 0x54555604
 
         fun write(file: File, s: Snapshot) {
             val tmp = File(file.parentFile, file.name + ".tmp")

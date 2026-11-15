@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.core.animateDpAsState
 import android.os.Bundle
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.CompositionLocalProvider
@@ -72,7 +75,15 @@ class MainActivity : ComponentActivity() {
 fun MainScreen() {
     val app = IptvApp.instance
     val context = LocalContext.current
-    val nav = remember { Nav() }
+    val homeList = rememberLazyListState()
+    val movieRows = rememberLazyListState()
+    val showRows = rememberLazyListState()
+    val liveList = rememberLazyListState()
+    val nav = rememberSaveable(
+        saver = listSaver<Nav, String>(save = { it.save() }, restore = { saved ->
+            Nav(homeList, movieRows, showRows, liveList).apply { restore(saved) }
+        }),
+    ) { Nav(homeList, movieRows, showRows, liveList) }
     val config = LocalConfiguration.current
     val isTv = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
     val wide = isTv || config.screenWidthDp >= 840
@@ -205,6 +216,11 @@ private fun Content(nav: Nav, wide: Boolean, state: PlaylistRepository.State) {
             val view by app.playlists.view.collectAsState()
             val v = view ?: return CenterMessage("Preparing…", loading = true)
             val route = nav.stack.lastOrNull()
+            // Each screen remembers which card had the focus, to hand it back on return.
+            CompositionLocalProvider(
+                LocalFocusMemory provides nav.focus,
+                LocalScreenId provides (route?.toString() ?: nav.tab.name),
+            ) {
             when (route) {
                 is Route.MovieDetail -> MovieDetailScreen(route.id, v, nav, wide)
                 is Route.ShowDetail -> ShowDetailScreen(route.id, v, nav, wide)
@@ -219,6 +235,7 @@ private fun Content(nav: Nav, wide: Boolean, state: PlaylistRepository.State) {
                     Tab.SEARCH -> SearchScreen(v, nav, wide)
                     Tab.SETTINGS -> SettingsScreen(wide)
                 }
+            }
             }
         }
     }

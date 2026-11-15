@@ -27,6 +27,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -126,7 +129,7 @@ fun ActionButton(
 @Composable
 fun RatingsRow(details: MetaDetails?, fallbackVote: Double?) {
     val chips = ArrayList<Triple<String, String, Color>>()
-    details?.ratings?.rottenTomatoes?.let { chips += Triple("🍅", it, Tomato) }
+    details?.ratings?.rottenTomatoes?.let { chips += Triple("Rotten Tomatoes", it, Tomato) }
     details?.ratings?.imdb?.let { chips += Triple("IMDb", it, Gold) }
     details?.ratings?.metacritic?.let { chips += Triple("Metacritic", it, Color(0xFF66CC33)) }
     val tmdb = details?.item?.vote ?: fallbackVote
@@ -219,6 +222,9 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                                 if (fav) "In my list" else "My list",
                                 if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, false,
                             ) { app.store.toggleFavorite("m:${movie.id}") }
+                            details?.trailer?.let { key ->
+                                ActionButton("Trailer", Icons.Filled.Movie, false) { openTrailer(context, key) }
+                            }
                         }
                         val overview = details?.item?.overview?.takeIf { it.isNotBlank() } ?: meta?.overview
                         if (!overview.isNullOrBlank()) {
@@ -226,6 +232,7 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                                 style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow),
                                 maxLines = if (wide) 6 else 10, overflow = TextOverflow.Ellipsis)
                         }
+                        Credits(details, "Director")
                     }
                 }
             }
@@ -320,6 +327,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
         show.episodes.firstOrNull()?.let { es.msaezo.iptv.data.Library.bestVersion(it.versions, language) }
     }
     val similar by produceState(emptyList<Show>(), id) { value = app.meta.similarShows(show) }
+    var seasonsOpen by remember(id) { mutableStateOf(false) }
     var season by remember(id) { mutableStateOf(next?.first?.season ?: show.seasons.first()) }
     val episodes = remember(show, season) { show.episodesOf(season) }
     val meta = details?.item ?: known[show.id]
@@ -363,6 +371,9 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                                 if (fav) "In my list" else "My list",
                                 if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, false,
                             ) { app.store.toggleFavorite("s:${show.id}") }
+                            details?.trailer?.let { key ->
+                                ActionButton("Trailer", Icons.Filled.Movie, false) { openTrailer(context, key) }
+                            }
                         }
                         val overview = details?.item?.overview?.takeIf { it.isNotBlank() } ?: meta?.overview
                         if (!overview.isNullOrBlank()) {
@@ -370,6 +381,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                                 style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow),
                                 maxLines = if (wide) 5 else 8, overflow = TextOverflow.Ellipsis)
                         }
+                        Credits(details, "Created by")
                     }
                 }
             }
@@ -385,12 +397,45 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                 }
             }
         }
-        if (show.seasons.size > 1) item {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = pad, vertical = 8.dp),
-            ) {
-                items(show.seasons) { s -> Pill("Season $s", s == season) { season = s } }
+        if (show.seasons.size > 1) {
+            item {
+                Row(
+                    Modifier
+                        .padding(horizontal = pad, vertical = 8.dp)
+                        .width(if (wide) 320.dp else 240.dp)
+                        .tvClickable(Square, 1.02f) { seasonsOpen = !seasonsOpen }
+                        .background(Color(0xFF2A2A2A), Square)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Season $season", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                    Text(
+                        "${episodes.size} episodes", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Icon(
+                        if (seasonsOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        null, Modifier.size(22.dp),
+                    )
+                }
+            }
+            if (seasonsOpen) items(show.seasons) { s ->
+                Row(
+                    Modifier
+                        .padding(horizontal = pad)
+                        .width(if (wide) 320.dp else 240.dp)
+                        .tvClickable(Square, 1.02f) { season = s; seasonsOpen = false }
+                        .background(if (s == season) Color(0xFF3A3A3A) else Color(0xFF1C1C1C), Square)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Season $s", Modifier.weight(1f), fontWeight = if (s == season) FontWeight.Bold else FontWeight.Normal)
+                    Text(
+                        "${show.episodesOf(s).size}", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
         itemsIndexed(episodes) { _, ep ->
@@ -430,6 +475,43 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
             }
         }
         item { TmdbAttribution(pad) }
+    }
+}
+
+/** Director / creators and the first names of the cast, when TMDB knows them. */
+@Composable
+private fun Credits(details: MetaDetails?, directorLabel: String) {
+    if (details == null || (details.directors.isEmpty() && details.cast.isEmpty())) return
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (details.directors.isNotEmpty()) CreditLine(directorLabel, details.directors.joinToString(", "))
+        if (details.cast.isNotEmpty()) CreditLine("Cast", details.cast.joinToString(", "))
+    }
+}
+
+@Composable
+private fun CreditLine(label: String, names: String) {
+    Row {
+        Text("$label  ", color = Color(0xFFBDBDBD), style = MaterialTheme.typography.bodyMedium.copy(shadow = TitleShadow))
+        Text(
+            names, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium.copy(shadow = TitleShadow),
+        )
+    }
+}
+
+/** Opens a trailer in the YouTube app, or in the browser when that isn't installed. */
+private fun openTrailer(context: android.content.Context, key: String) {
+    Preview.stop()
+    val app = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$key"))
+    val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$key"))
+    try {
+        context.startActivity(app)
+    } catch (e: Exception) {
+        try {
+            context.startActivity(web)
+        } catch (e2: Exception) {
+            android.widget.Toast.makeText(context, "No app on this device can open the trailer", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 }
 

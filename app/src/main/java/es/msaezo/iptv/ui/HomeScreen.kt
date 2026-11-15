@@ -270,8 +270,11 @@ private fun Hero(list: List<Featured>, known: Map<String, TmdbItem>, wide: Boole
     val playFocus = remember { FocusRequester() }
     var index by remember { mutableIntStateOf(0) }
     if (wide) {
+        // Only on a fresh visit: when coming back, the card you left keeps the focus.
         LaunchedEffect(list.isNotEmpty()) {
-            delay(500); runCatching { playFocus.requestFocus() }
+            if (nav.focus.last[Tab.HOME.name] == null) {
+                delay(500); runCatching { playFocus.requestFocus() }
+            }
         }
     }
     LaunchedEffect(list.size) {

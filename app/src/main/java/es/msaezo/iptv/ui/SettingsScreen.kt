@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.data.PlaylistRepository
 import es.msaezo.iptv.data.Tags
+import es.msaezo.iptv.data.UserStore
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
@@ -223,6 +224,22 @@ fun SettingsScreen(wide: Boolean) {
                             Hint("Plays the opening minutes without sound behind the title. Uses your stream connection while it runs.")
                         }
                     }
+                    val audioOffset by store.audioOffset.collectAsState()
+                    Text("Audio sync", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ActionButton("−", null, false) { store.setAudioOffset(audioOffset - UserStore.AUDIO_OFFSET_STEP) }
+                        Text(
+                            when {
+                                audioOffset == 0 -> "0 ms"
+                                audioOffset > 0 -> "+$audioOffset ms  ·  sound later"
+                                else -> "$audioOffset ms  ·  sound earlier"
+                            },
+                            fontWeight = FontWeight.Medium,
+                        )
+                        ActionButton("+", null, false) { store.setAudioOffset(audioOffset + UserStore.AUDIO_OFFSET_STEP) }
+                        if (audioOffset != 0) ActionButton("Reset", null, false) { store.setAudioOffset(0) }
+                    }
+                    Hint("If lips and sound don't match: sound arriving late needs a negative value. While a film is playing, up / down on the remote changes it in 25 ms steps (limit ±500 ms).")
                     Hint("Some providers only accept certain players. Change the user agent if streams refuse to play.")
                     OutlinedTextField(
                         value = ua, onValueChange = { ua = it }, label = { Text("User agent") },

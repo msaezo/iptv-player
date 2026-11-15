@@ -43,6 +43,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.ForwardingAudioSink
+import es.msaezo.iptv.data.UserStore
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -133,7 +136,7 @@ class PlayerActivity : ComponentActivity() {
             )
             .setConstantBitrateSeekingEnabled(true)
 
-        val renderers = DefaultRenderersFactory(this)
+        val renderers = OffsetRenderers(this) { store.audioOffset.value }
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
@@ -161,9 +164,11 @@ class PlayerActivity : ComponentActivity() {
         // Left / right on the progress bar also move one minute (the default was 1/20 of the film).
         playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.setKeyTimeIncrement(JUMP_MS)
 
-        // Keep the progress line and the buttons away from the edges: 5% free on each side.
+        // Keep the progress line and the buttons away from the edges: 2% free on each side.
         runCatching {
-            val side = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.05f).toInt()
+            val side = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.02f).toInt()
+            // No dark band behind the buttons: they sit straight on the picture.
+            playerView.findViewById<View>(androidx.media3.ui.R.id.exo_bottom_bar)?.setBackgroundColor(Color.TRANSPARENT)
             for (id in intArrayOf(androidx.media3.ui.R.id.exo_bottom_bar, androidx.media3.ui.R.id.exo_progress)) {
                 val v = playerView.findViewById<View>(id) ?: continue
                 val lp = v.layoutParams as? ViewGroup.MarginLayoutParams ?: continue
@@ -387,6 +392,19 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    /** Up / down during a film or episode: move the sound against the picture. */
+    private fun nudgeAudio(stepMs: Int) {
+        store.setAudioOffset(store.audioOffset.value + stepMs)
+        val v = store.audioOffset.value
+        showOverlay(
+            when {
+                v == 0 -> "Audio in sync (0 ms)"
+                v > 0 -> "Audio +$v ms  ·  sound later"
+                else -> "Audio $v ms  ·  sound earlier"
+            }
+        )
+    }
+
     private var centerHandled = false
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -416,9 +434,13 @@ class PlayerActivity : ComponentActivity() {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> if (live) {
                     playLive(Playback.index - 1); return true
+                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    nudgeAudio(UserStore.AUDIO_OFFSET_STEP); return true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> if (live) {
                     playLive(Playback.index + 1); return true
+                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    nudgeAudio(-UserStore.AUDIO_OFFSET_STEP); return true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (!live) {
                     player.seekBack(); playerView.showController(); return true
@@ -491,6 +513,28 @@ class PlayerActivity : ComponentActivity() {
             val s = ms / 1000
             return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
             else "%d:%02d".format(s / 60, s % 60)
+        }
+    }
+}
+
+/**
+ * Renderers whose audio clock can be shifted, to correct sound that runs ahead of or
+ * behind the picture. The video follows the audio clock, so reporting the audio
+ * position a little later or earlier moves one against the other.
+ */
+@OptIn(markerClass = [UnstableApi::class])
+private class OffsetRenderers(context: Context, private val offsetMs: () -> Int) : DefaultRenderersFactory(context) {
+    override fun buildAudioSink(
+        context: Context,
+        enableFloatOutput: Boolean,
+        enableAudioTrackPlaybackParams: Boolean,
+    ): AudioSink? {
+        val base = super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams) ?: return null
+        return object : ForwardingAudioSink(base) {
+            override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
+                val p = super.getCurrentPositionUs(sourceEnded)
+                return if (p == AudioSink.CURRENT_POSITION_NOT_SET) p else p + offsetMs() * 1000L
+            }
         }
     }
 }

@@ -184,6 +184,7 @@ object Tags {
     private val prefixPipeRegex = Regex("""^\s*\|([A-Za-z]{2,5})\|""")
     private val trailingTagRegex = Regex("""[\s\-_.]([A-Za-z]{2,10})\s*$""")
     private val spaces = Regex("\\s+")
+    private val underscoreTag = Regex("""_([A-Za-z0-9]{2,8})\s*$""")
     private val tagSplit = Regex("[^\\p{L}0-9+]+")
 
     /** Language of one tag as written: words always count, short codes only in capitals. */
@@ -219,6 +220,12 @@ object Tags {
             for (t in m.groupValues[1].split(tagSplit)) {
                 if (t.isNotEmpty()) langOfTag(t)?.let { return it }
             }
+        }
+        var tail = name
+        for (i in 0 until 3) {
+            val m = underscoreTag.find(tail) ?: break
+            languageTokens[fold(m.groupValues[1])]?.let { return it }
+            tail = tail.substring(0, m.range.first)
         }
         trailingTagRegex.find(name)?.let { m ->
             val w = m.groupValues[1]
@@ -296,7 +303,15 @@ object Tags {
 
     /** Display title with language / quality / service tags removed. */
     fun displayTitle(title: String): String {
-        var s = prefixPipeRegex.replace(title, "")
+        // "Shameless_eng", "Dark_ES_4K": tags glued on with underscores, in any letter case.
+        var s = title
+        while (true) {
+            val m = underscoreTag.find(s) ?: break
+            val f = fold(m.groupValues[1])
+            if (f in languageTokens || f in noiseTokens || f in serviceTokens) s = s.substring(0, m.range.first) else break
+        }
+        if ('_' in s) s = s.replace('_', ' ')
+        s = prefixPipeRegex.replace(s, "")
         for (i in 0 until 3) {
             val m = prefixRegex.find(s) ?: break
             if (!isTag(m.groupValues[1])) break

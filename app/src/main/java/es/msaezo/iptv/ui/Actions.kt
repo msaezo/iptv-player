@@ -43,16 +43,21 @@ sealed interface Route {
     data class ItemsRoute(val title: String) : Route
 }
 
-/** Minimal navigation: a selected tab plus a stack of detail screens. */
-class Nav {
+/**
+ * Minimal navigation: a selected tab plus a stack of detail screens. Everything here is
+ * saved with the activity, so coming back from the player returns to the same place
+ * even when the TV closed the app's screens to free memory in the meantime.
+ */
+class Nav(
+    val homeList: LazyListState,
+    val movieRows: LazyListState,
+    val showRows: LazyListState,
+    val liveList: LazyListState,
+) {
     var tab by mutableStateOf(Tab.HOME)
     val stack = mutableStateListOf<Route>()
     val lists = HashMap<String, List<Any>>()
-
-    fun openList(title: String, items: List<Any>) {
-        lists[title] = items
-        open(Route.ItemsRoute(title))
-    }
+    val focus = FocusMemory()
 
     var movieCategory by mutableIntStateOf(0)
     var showCategory by mutableIntStateOf(0)
@@ -60,10 +65,10 @@ class Nav {
     var liveFilter by mutableIntStateOf(0)
     var searchQuery by mutableStateOf("")
 
-    val movieRows = LazyListState()
-    val showRows = LazyListState()
-    val liveList = LazyListState()
-    val homeList = LazyListState()
+    fun openList(title: String, items: List<Any>) {
+        lists[title] = items
+        open(Route.ItemsRoute(title))
+    }
 
     fun select(t: Tab) {
         stack.clear(); tab = t
@@ -77,6 +82,39 @@ class Nav {
         stack.isNotEmpty() -> { stack.removeAt(stack.size - 1); true }
         tab != Tab.HOME -> { tab = Tab.HOME; true }
         else -> false
+    }
+
+    fun save(): ArrayList<String> = arrayListOf(
+        tab.name, "$movieCategory", "$showCategory", "$liveCategory", "$liveFilter", searchQuery,
+    ).apply {
+        for (r in stack) when (r) {
+            is Route.MovieDetail -> add("M|${r.id}")
+            is Route.ShowDetail -> add("S|${r.id}")
+            is Route.CollectionRoute -> add("C|${r.key}")
+            is Route.CategoryRoute -> add("G|${if (r.series) 1 else 0}|${r.name}")
+            is Route.ItemsRoute -> Unit // its list lives in memory only
+        }
+    }
+
+    fun restore(saved: List<String>) {
+        if (saved.size < 6) return
+        tab = runCatching { Tab.valueOf(saved[0]) }.getOrDefault(Tab.HOME)
+        movieCategory = saved[1].toIntOrNull() ?: 0
+        showCategory = saved[2].toIntOrNull() ?: 0
+        liveCategory = saved[3].toIntOrNull() ?: 0
+        liveFilter = saved[4].toIntOrNull() ?: 0
+        searchQuery = saved[5]
+        stack.clear()
+        for (r in saved.drop(6)) {
+            val kind = r.substringBefore('|')
+            val rest = r.substringAfter('|')
+            when (kind) {
+                "M" -> stack.add(Route.MovieDetail(rest))
+                "S" -> stack.add(Route.ShowDetail(rest))
+                "C" -> stack.add(Route.CollectionRoute(rest))
+                "G" -> stack.add(Route.CategoryRoute(rest.substringBefore('|') == "1", rest.substringAfter('|')))
+            }
+        }
     }
 }
 

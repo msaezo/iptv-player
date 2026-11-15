@@ -45,6 +45,10 @@ data class MetaDetails(
     val imdbId: String?,
     val seasons: Int?,
     val ratings: Ratings?,
+    /** YouTube id of a trailer, if TMDB lists one. */
+    val trailer: String? = null,
+    val directors: List<String> = emptyList(),
+    val cast: List<String> = emptyList(),
 )
 
 data class CollectionDef(
@@ -172,8 +176,10 @@ class MetaRepository(
             if (key.isBlank()) return@withContext null
             try {
                 val item = _known.value[id] ?: searchTmdb(type, title, year, key) ?: return@withContext null
-                val d = tmdb("/$type/${item.id}", mapOf("language" to LANG, "append_to_response" to "external_ids"),
-                    key, ttlHours = 24 * 7)
+                val d = tmdb("/$type/${item.id}", mapOf(
+                    "language" to LANG, "append_to_response" to "external_ids,videos,credits",
+                    "include_video_language" to "es,en,null",
+                ), key, ttlHours = 24 * 7)
                 var overview = d?.optString("overview").orEmpty()
                 if (overview.isBlank()) {
                     overview = tmdb("/$type/${item.id}", mapOf("language" to "en-US"), key, 24 * 7)
@@ -187,7 +193,28 @@ class MetaRepository(
                 val imdbId = (d?.optString("imdb_id")?.takeIf { it.startsWith("tt") })
                     ?: d?.optJSONObject("external_ids")?.optString("imdb_id")?.takeIf { it.startsWith("tt") }
                 val ratings = imdbId?.let { omdb(it) }
+                val credits = d?.optJSONObject("credits")
+                val cast = credits?.optJSONArray("cast")?.let { a ->
+                    (0 until minOf(a.length(), 5)).mapNotNull { a.optJSONObject(it)?.optString("name")?.takeIf { n -> n.isNotBlank() } }
+                }.orEmpty()
+                val directors = if (type == "movie") {
+                    credits?.optJSONArray("crew")?.let { a ->
+                        (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+                            .filter { it.optString("job") == "Director" }.map { it.optString("name") }
+                    }.orEmpty()
+                } else {
+                    d?.optJSONArray("created_by")?.let { a ->
+                        (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("name") }
+                    }.orEmpty()
+                }.filter { it.isNotBlank() }.take(2)
+                val videos = d?.optJSONObject("videos")?.optJSONArray("results")?.let { a ->
+                    (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+                }.orEmpty().filter { it.optString("site") == "YouTube" && it.optString("key").isNotBlank() }
+                val trailer = videos.filter { it.optString("type") == "Trailer" }
+                    .sortedWith(compareBy({ if (it.optString("iso_639_1") == "es") 0 else 1 }, { if (it.optBoolean("official")) 0 else 1 }))
+                    .firstOrNull()?.optString("key")
                 val result = MetaDetails(
+                    trailer = trailer, directors = directors, cast = cast,
                     item = item.copy(overview = overview.ifBlank { item.overview }),
                     runtime = runtime,
                     genres = genres,

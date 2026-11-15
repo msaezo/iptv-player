@@ -34,6 +34,15 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.delay
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +54,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +68,34 @@ import es.msaezo.iptv.data.Movie
 import es.msaezo.iptv.data.Show
 import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.data.TmdbItem
+
+/** Per screen: the card that last had the focus, and where each row was scrolled to. */
+class FocusMemory {
+    val last = HashMap<String, String>()
+    val rows = HashMap<String, LazyListState>()
+}
+
+val LocalFocusMemory = staticCompositionLocalOf<FocusMemory?> { null }
+val LocalScreenId = compositionLocalOf { "" }
+val LocalRowKey = compositionLocalOf { "" }
+
+/**
+ * Remembers that this item had the focus on its screen and takes it back when the screen
+ * is shown again, so Back returns to the card you came from. Put it before the clickable.
+ */
+@Composable
+fun Modifier.focusMemory(key: String): Modifier {
+    val memory = LocalFocusMemory.current ?: return this
+    val screen = LocalScreenId.current
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(key, screen) {
+        if (memory.last[screen] == key) {
+            delay(80)
+            runCatching { requester.requestFocus() }
+        }
+    }
+    return this.focusRequester(requester).onFocusChanged { if (it.isFocused) memory.last[screen] = key }
+}
 
 /**
  * Clickable that is comfortable on a TV remote: grows slightly and shows a white
@@ -130,6 +168,7 @@ fun PosterCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
+                .focusMemory("${LocalRowKey.current}|$title|$subtitle")
                 .tvClickable(onClick = onClick)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
@@ -256,19 +295,25 @@ fun CenterMessage(text: String, loading: Boolean = false, action: (@Composable (
 }
 
 @Composable
-fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        color = if (selected) Color.Black else Color.White,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        modifier = Modifier
+fun Pill(text: String, selected: Boolean, icon: ImageVector? = null, onClick: () -> Unit) {
+    val color = if (selected) Color.Black else Color.White
+    Row(
+        Modifier
             .tvClickable(Square, 1.06f, onClick)
             .background(if (selected) Color.White else Color(0x26FFFFFF), Square)
             .border(1.dp, if (selected) Color.White else Color(0x55FFFFFF), Square)
-            .padding(horizontal = 16.dp, vertical = 7.dp),
-    )
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, Modifier.size(16.dp), tint = color)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text, maxLines = 1, overflow = TextOverflow.Ellipsis, color = color,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        )
+    }
 }
 
 /** 16:9 artwork card (Netflix-style rows). */
@@ -285,6 +330,7 @@ fun LandscapeCard(
         Modifier
             .width(width)
             .aspectRatio(16f / 9f)
+            .focusMemory("${LocalRowKey.current}|$title")
             .tvClickable(Square, 1.08f, onClick)
             .background(Color(0xFF222222))
     ) {
@@ -339,6 +385,8 @@ fun <T> CategoryLayout(
     selected: Int,
     onSelect: (Int) -> Unit,
     wide: Boolean,
+    icon: (String) -> ImageVector? = { null },
+    badge: (String) -> String? = { null },
     content: @Composable (Category<T>) -> Unit,
 ) {
     if (categories.isEmpty()) {
@@ -367,6 +415,18 @@ fun <T> CategoryLayout(
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        val mark = badge(c.name)
+                        val glyph = icon(c.name)
+                        if (glyph != null) {
+                            Icon(glyph, null, Modifier.size(18.dp), tint = if (isSel) Color.White else Color(0xFFB8B8B8))
+                            Spacer(Modifier.width(12.dp))
+                        } else if (mark != null) {
+                            Text(
+                                mark, Modifier.width(18.dp), fontWeight = FontWeight.Bold, fontSize = 10.sp, maxLines = 1,
+                                color = if (isSel) Color.White else Color(0xFFB8B8B8),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                        }
                         Text(
                             c.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
@@ -386,7 +446,7 @@ fun <T> CategoryLayout(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(categories) { i, c -> Pill(c.name, i == sel) { onSelect(i) } }
+                itemsIndexed(categories) { i, c -> Pill(c.name, i == sel, icon(c.name)) { onSelect(i) } }
             }
             Box(Modifier.weight(1f).fillMaxSize()) { content(categories[sel]) }
         }
@@ -410,12 +470,18 @@ fun <T> PosterRow(
             color = Color(0xFFE5E5E5),
             modifier = Modifier.padding(start = startPadding, top = 14.dp, bottom = 6.dp),
         )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(start = startPadding, end = startPadding, top = 8.dp, bottom = 8.dp),
-        ) {
-            items(list) { card(it) }
-            if (onSeeAll != null) item { SeeAllCard(seeAllWidth, seeAllRatio, onSeeAll) }
+        val memory = LocalFocusMemory.current
+        val screen = LocalScreenId.current
+        val state = memory?.rows?.getOrPut("$screen/$title") { LazyListState() } ?: rememberLazyListState()
+        CompositionLocalProvider(LocalRowKey provides title) {
+            LazyRow(
+                state = state,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(start = startPadding, end = startPadding, top = 8.dp, bottom = 8.dp),
+            ) {
+                items(list) { card(it) }
+                if (onSeeAll != null) item { SeeAllCard(seeAllWidth, seeAllRatio, onSeeAll) }
+            }
         }
     }
 }

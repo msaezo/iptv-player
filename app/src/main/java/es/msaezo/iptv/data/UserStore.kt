@@ -43,6 +43,15 @@ class UserStore(context: Context) {
         _preview.value = on; prefs.edit().putBoolean("preview", on).apply()
     }
 
+    private val _audioOffset = MutableStateFlow(prefs.getInt("audioOffsetMs", 0))
+    /** Lip-sync correction in ms: positive = sound later, negative = sound earlier. */
+    val audioOffset: StateFlow<Int> = _audioOffset.asStateFlow()
+
+    fun setAudioOffset(ms: Int) {
+        val v = ms.coerceIn(-AUDIO_OFFSET_MAX, AUDIO_OFFSET_MAX)
+        _audioOffset.value = v; prefs.edit().putInt("audioOffsetMs", v).apply()
+    }
+
     private val _favorites = MutableStateFlow(prefs.getStringSet("favorites", emptySet())!!.toSet())
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
 
@@ -167,6 +176,9 @@ class UserStore(context: Context) {
     }
 
     companion object {
+        /** Lip-sync errors beyond half a second are a broken file, not a delay to tune. */
+        const val AUDIO_OFFSET_MAX = 500
+        const val AUDIO_OFFSET_STEP = 25
         const val DEFAULT_UA = "VLC/3.0.20 LibVLC/3.0.20"
     }
 }
