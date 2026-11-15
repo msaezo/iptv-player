@@ -77,24 +77,24 @@ class XtreamData(val entries: List<Entry>, val series: List<SeriesSource>, val e
 /** Loads live channels, movies and series from an Xtream Codes panel (player_api.php). */
 class XtreamClient(private val cacheDir: File, private val userAgent: () -> String) {
 
-    fun load(acc: XtreamAccount, force: Boolean, progress: (String) -> Unit): XtreamData {
+    /**
+     * Downloads the catalogue lists and turns them into entries. Items that are unchanged
+     * since the [previous] catalogue reuse the work already done for them.
+     */
+    fun load(
+        acc: XtreamAccount,
+        previous: Map<String, Entry>?,
+        previousSeries: Map<String, SeriesSource>?,
+        progress: (String) -> Unit,
+    ): XtreamData {
         cacheDir.mkdirs()
-        val stamp = File(cacheDir, "xt_account.txt")
-        val accountKey = "${acc.base}|${acc.username}"
-        val sameAccount = stamp.exists() && stamp.readText() == accountKey
-        val needDownload = force || !sameAccount ||
-            ACTIONS.any { !File(cacheDir, "xt_$it.json").exists() }
-
-        if (needDownload) {
-            progress("Signing in…")
-            checkLogin(acc)
-            for ((i, action) in ACTIONS.withIndex()) {
-                progress("Updating catalogue: ${LABELS[i]}…")
-                Http.download(acc.api(action), File(cacheDir, "xt_$action.json"), userAgent()) { mb ->
-                    progress("Updating catalogue: ${LABELS[i]}… $mb MB")
-                }
+        progress("Signing in…")
+        checkLogin(acc)
+        for ((i, action) in ACTIONS.withIndex()) {
+            progress("Updating catalogue: ${LABELS[i]}…")
+            Http.download(acc.api(action), File(cacheDir, "xt_$action.json"), userAgent()) { mb ->
+                progress("Updating catalogue: ${LABELS[i]}… $mb MB")
             }
-            stamp.writeText(accountKey)
         }
 
         progress("Reading channels…")
@@ -107,9 +107,16 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             val id = o["stream_id"] ?: return@readArray
             val name = o["name"]?.trim().orEmpty().ifEmpty { "Channel $id" }
             val group = liveCats[o["category_id"]] ?: "Uncategorized"
+            val liveUrl = acc.liveUrl(id)
+            val logo = o["stream_icon"]?.takeIf { it.startsWith("http") }
+            val old = previous?.get(liveUrl)
+            if (old != null && old.rawName == name && old.group == group && old.logo == logo) {
+                entries += old
+                return@readArray
+            }
             entries += Entry(
-                title = name, rawName = name, url = acc.liveUrl(id),
-                logo = o["stream_icon"]?.takeIf { it.startsWith("http") },
+                title = name, rawName = name, url = liveUrl,
+                logo = logo,
                 group = group, tvgId = o["epg_channel_id"]?.takeIf { it.isNotBlank() },
                 type = ContentType.LIVE,
                 language = Tags.languageOfGroup(group) ?: Tags.UNKNOWN,
@@ -121,13 +128,16 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             val id = o["stream_id"] ?: return@readArray
             val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
             val group = vodCats[o["category_id"]] ?: "Movies"
+            val movieUrl = acc.movieUrl(id, o["container_extension"])
             val base = Classifier.classify(
-                rawName = name, url = acc.movieUrl(id, o["container_extension"]),
+                rawName = name, url = movieUrl,
                 logo = o["stream_icon"]?.takeIf { it.startsWith("http") }, group = group,
                 tvgId = null, duration = null, userAgent = null, referrer = null,
+                previous = previous,
             )
             val year = base.year ?: o["year"]?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2100 }
-            entries += base.copy(year = year, rating = parseRating(o["rating"]))
+            val rating = parseRating(o["rating"])
+            entries += if (base.year == year && base.rating == rating) base else base.copy(year = year, rating = rating)
         }
         progress("Reading series…")
         val series = ArrayList<SeriesSource>(8192)
@@ -135,6 +145,11 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
             val id = o["series_id"] ?: return@readArray
             val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
             val group = seriesCats[o["category_id"]] ?: "Series"
+            val oldSeries = previousSeries?.get(id)
+            if (oldSeries != null && oldSeries.rawName == name && oldSeries.group == group) {
+                series += oldSeries
+                return@readArray
+            }
             val (t, y) = Classifier.splitYear(name)
             series += SeriesSource(
                 seriesId = id, rawName = name, title = Tags.displayTitle(t), group = group,
@@ -144,6 +159,8 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
                 year = y ?: (o["releaseDate"] ?: o["release_date"])?.take(4)?.toIntOrNull(),
             )
         }
+        // The raw lists are no longer needed: the organised catalogue is saved separately.
+        for (action in ACTIONS) File(cacheDir, "xt_$action.json").delete()
         return XtreamData(entries, series, acc.epgUrl)
     }
 

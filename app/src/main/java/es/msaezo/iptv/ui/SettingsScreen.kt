@@ -71,6 +71,9 @@ fun SettingsScreen(wide: Boolean) {
     val omdbSaved by store.omdbKey.collectAsState()
     val uaSaved by store.userAgent.collectAsState()
     val metaError by app.meta.lastError.collectAsState()
+    val refreshing by app.playlists.refreshing.collectAsState()
+    val refreshError by app.playlists.refreshError.collectAsState()
+    val lastUpdated by app.playlists.lastUpdated.collectAsState()
 
     var url by remember(savedUrl) { mutableStateOf(if (savedUrl.startsWith("content://")) "" else savedUrl) }
     var tmdb by remember(tmdbSaved) { mutableStateOf(tmdbSaved) }
@@ -119,6 +122,19 @@ fun SettingsScreen(wide: Boolean) {
                         }
                     }
                     Hint(status)
+                    if (refreshing != null) {
+                        Hint("Refreshing in the background: $refreshing  (you can keep using the app)")
+                    } else if (refreshError != null) {
+                        Text("Refresh failed, still showing the saved catalogue: $refreshError",
+                            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    } else if (lastUpdated > 0) {
+                        val h = (System.currentTimeMillis() - lastUpdated) / 3_600_000L
+                        Hint(
+                            "Catalogue saved on this device, updated " +
+                                (if (h < 1) "less than an hour ago" else if (h < 48) "$h h ago" else "${h / 24} days ago") +
+                                ". It refreshes by itself once a day."
+                        )
+                    }
                     if (savedUrl.startsWith("content://")) Hint("Using a local file.")
                 }
             }

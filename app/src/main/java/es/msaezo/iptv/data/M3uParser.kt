@@ -17,7 +17,8 @@ object M3uParser {
         Regex("""\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|m3u8)\s*$""", RegexOption.IGNORE_CASE)
     private val attrRegex = Regex("""([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"""")
 
-    fun parse(reader: BufferedReader): Result {
+    fun parse(reader: BufferedReader, previous: Map<String, Entry>? = null): Result {
+        val groups = HashMap<String, String>()
         val entries = ArrayList<Entry>(8192)
         var epgUrl: String? = null
         var info: String? = null
@@ -60,7 +61,7 @@ object M3uParser {
                 }
                 line.startsWith("#") -> Unit // other directives/comments
                 else -> {
-                    entries += buildEntry(info, line, extGroup, userAgent, referrer)
+                    entries += buildEntry(info, line, extGroup, userAgent, referrer, previous, groups)
                     info = null
                     extGroup = null
                     userAgent = null
@@ -85,6 +86,8 @@ object M3uParser {
         extGroup: String?,
         userAgent: String?,
         referrer: String?,
+        previous: Map<String, Entry>? = null,
+        groups: HashMap<String, String>? = null,
     ): Entry {
         var header = ""
         var title = ""
@@ -103,7 +106,7 @@ object M3uParser {
             .replace(fileExtRegex, "")
         val logo = (attrs["tvg-logo"] ?: attrs["logo"])?.takeIf { it.isNotBlank() }
         val group = (attrs["group-title"]?.takeIf { it.isNotBlank() } ?: extGroup)
-            ?.trim()?.ifEmpty { null } ?: "Uncategorized"
+            ?.trim()?.ifEmpty { null }?.let { g -> groups?.getOrPut(g) { g } ?: g } ?: "Uncategorized"
 
         return Classifier.classify(
             rawName = rawName,
@@ -114,6 +117,7 @@ object M3uParser {
             duration = duration,
             userAgent = userAgent,
             referrer = referrer,
+            previous = previous,
         )
     }
 
@@ -188,7 +192,12 @@ object Classifier {
         duration: Double?,
         userAgent: String?,
         referrer: String?,
+        previous: Map<String, Entry>? = null,
     ): Entry {
+        // Refresh: an item that hasn't changed keeps the work done last time.
+        previous?.get(url)?.let { old ->
+            if (old.rawName == rawName && old.group == group && old.logo == logo) return old
+        }
         val lowerUrl = url.lowercase()
         val ep = matchEpisode(rawName)
         val isLoopChannel = loopWord.containsMatchIn(group) || loopWord.containsMatchIn(rawName)
@@ -221,10 +230,11 @@ object Classifier {
             )
             ContentType.MOVIE -> {
                 val (title, year) = splitYear(rawName)
+                val shown = Tags.displayTitle(title).let { if (it == rawName) rawName else it }
                 Entry(
-                    title = Tags.displayTitle(title), rawName = rawName, url = url, logo = logo,
+                    title = shown, rawName = rawName, url = url, logo = logo,
                     group = group, tvgId = tvgId, type = type, year = year, language = language,
-                    quality = quality, userAgent = userAgent, referrer = referrer,
+                    quality = quality, key = Tags.mergeKey(shown), userAgent = userAgent, referrer = referrer,
                 )
             }
             ContentType.SERIES -> {
@@ -239,7 +249,7 @@ object Classifier {
                     title = epTitle, rawName = rawName, url = url, logo = logo, group = group,
                     tvgId = tvgId, type = type, showName = show, season = ep?.season ?: 1,
                     episode = ep?.episode, language = language, quality = quality,
-                    userAgent = userAgent, referrer = referrer,
+                    key = Tags.mergeKey(show), userAgent = userAgent, referrer = referrer,
                 )
             }
         }

@@ -71,17 +71,52 @@ object Tags {
     )
 
     private val marks = Regex("\\p{Mn}+")
-    private val tokenSplit = Regex("[^A-Za-z0-9+]+")
 
-    private fun fold(s: String) =
-        Normalizer.normalize(s, Normalizer.Form.NFD).replace(marks, "").uppercase()
+    private fun fold(s: String): String {
+        var ascii = true
+        for (c in s) if (c.code >= 128) { ascii = false; break }
+        return if (ascii) s.uppercase()
+        else Normalizer.normalize(s, Normalizer.Form.NFD).replace(marks, "").uppercase()
+    }
 
-    private fun tokens(s: String): List<String> = fold(s).split(tokenSplit).filter { it.isNotEmpty() }
+    /** Upper-case, accent-free words made of letters, digits and '+'. */
+    private fun tokens(s: String): List<String> {
+        val f = fold(s)
+        val out = ArrayList<String>(8)
+        var start = -1
+        for (i in f.indices) {
+            val c = f[i]
+            val ok = (c in 'A'..'Z') || (c in '0'..'9') || c == '+'
+            if (ok) { if (start < 0) start = i } else if (start >= 0) { out.add(f.substring(start, i)); start = -1 }
+        }
+        if (start >= 0) out.add(f.substring(start))
+        return out
+    }
+
+    // Category titles repeat for thousands of items: remember what was worked out for each.
+    private val groupLanguage = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val groupQuality = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** Language from a category title: every token counts ("ES | ACCIÓN", "PELICULAS CASTELLANO"). */
     fun languageOfGroup(group: String): String? {
-        for (t in tokens(group)) languageTokens[t]?.let { return it }
-        return null
+        val cached = groupLanguage[group]
+        if (cached != null) return cached.ifEmpty { null }
+        var found: String? = null
+        for (t in tokens(group)) { found = languageTokens[t]; if (found != null) break }
+        if (groupLanguage.size < 20_000) groupLanguage[group] = found ?: ""
+        return found
+    }
+
+    private fun qualityOfGroup(group: String): String? {
+        val cached = groupQuality[group]
+        if (cached != null) return cached.ifEmpty { null }
+        var best: String? = null
+        for (t in tokens(group)) {
+            val q = qualityTokens[t] ?: continue
+            if (qualityRank(q) > qualityRank(best)) best = q
+        }
+        if (groupQuality.size < 20_000) groupQuality[group] = best ?: ""
+        return best
     }
 
     private val bracketRegex = Regex("""[\[(]([^\])]{1,20})[\])]""")
@@ -117,8 +152,8 @@ object Tags {
         languageOfName(name) ?: languageOfGroup(group) ?: UNKNOWN
 
     fun quality(name: String, group: String): String? {
-        var best: String? = null
-        for (t in tokens(name) + tokens(group)) {
+        var best: String? = qualityOfGroup(group)
+        for (t in tokens(name)) {
             val q = qualityTokens[t] ?: continue
             if (qualityRank(q) > qualityRank(best)) best = q
         }

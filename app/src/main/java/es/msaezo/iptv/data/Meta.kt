@@ -318,8 +318,8 @@ class MetaRepository(
 
 /** Matches TMDB results to titles present in the (filtered) playlist. */
 class Matcher(view: LibraryView) {
-    private val movieIdx: Map<String, List<Movie>> = view.movies.groupBy { Tags.mergeKey(it.title) }
-    private val showIdx: Map<String, List<Show>> = view.shows.groupBy { Tags.mergeKey(it.name) }
+    private val movieIdx: Map<String, List<Movie>> = view.movies.groupBy { it.id.substringBeforeLast('|') }
+    private val showIdx: Map<String, List<Show>> = view.shows.groupBy { it.id.removePrefix("x:") }
 
     fun movie(item: TmdbItem): Movie? {
         val keys = listOf(item.title, item.originalTitle).filter { it.isNotBlank() }.map { Tags.mergeKey(it) }.distinct()

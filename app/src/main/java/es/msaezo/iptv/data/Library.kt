@@ -30,10 +30,6 @@ class Library(
     val movies: List<Movie>
     val shows: List<Show>
 
-    val byUrl: Map<String, Entry> = HashMap<String, Entry>(entries.size * 2).apply {
-        for (e in entries) putIfAbsent(e.url, e)
-    }
-
     /** How many movie/series streams exist per language (for the Settings checklist). */
     val languageCounts: Map<String, Int>
 
@@ -64,7 +60,7 @@ class Library(
 
         fun mergeMovies(entries: List<Entry>): List<Movie> {
             val byTitle = LinkedHashMap<String, MutableList<Entry>>()
-            for (e in entries) byTitle.getOrPut(Tags.mergeKey(e.title)) { ArrayList() }.add(e)
+            for (e in entries) byTitle.getOrPut(e.key.ifEmpty { Tags.mergeKey(e.title) }) { ArrayList() }.add(e)
 
             val out = ArrayList<Movie>(byTitle.size)
             for ((key, versions) in byTitle) {
@@ -95,7 +91,7 @@ class Library(
         fun mergeShows(entries: List<Entry>): List<Show> {
             val byShow = LinkedHashMap<String, MutableList<IndexedValue<Entry>>>()
             entries.forEachIndexed { i, e ->
-                val key = Tags.mergeKey(e.showName ?: e.title)
+                val key = e.key.ifEmpty { Tags.mergeKey(e.showName ?: e.title) }
                 byShow.getOrPut(key) { ArrayList() }.add(IndexedValue(i, e))
             }
             return byShow.map { (key, list) ->
@@ -211,11 +207,12 @@ class LibraryView(val library: Library, val filter: LibraryFilter) {
     val showCategories: List<Category<Show>> =
         categoriesOf(shows) { s -> s.episodes.flatMap { ep -> ep.versions.map { it.group } } + s.sources.map { it.group } }
 
-    private val movieByUrl = HashMap<String, Movie>().apply {
-        for (m in movies) for (v in m.versions) put(v.url, m)
+    // Only needed for "Continue watching": built the first time it is asked for.
+    private val movieByUrl by lazy {
+        HashMap<String, Movie>().apply { for (m in movies) for (v in m.versions) put(v.url, m) }
     }
-    private val showByUrl = HashMap<String, Show>().apply {
-        for (s in shows) for (ep in s.episodes) for (v in ep.versions) put(v.url, s)
+    private val showByUrl by lazy {
+        HashMap<String, Show>().apply { for (s in shows) for (ep in s.episodes) for (v in ep.versions) put(v.url, s) }
     }
 
     fun movieFor(url: String): Movie? = movieByUrl[url]

@@ -18,6 +18,8 @@ data class Entry(
     val language: String = Tags.UNKNOWN,
     val quality: String? = null,
     val rating: Double? = null,
+    /** Pre-computed key used to merge versions of the same movie / show. */
+    val key: String = "",
     val userAgent: String? = null,
     val referrer: String? = null,
 ) {
