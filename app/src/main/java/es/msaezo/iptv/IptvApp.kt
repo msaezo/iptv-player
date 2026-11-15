@@ -1,6 +1,7 @@
 package es.msaezo.iptv
 
 import android.app.Application
+import es.msaezo.iptv.data.EpgRepository
 import es.msaezo.iptv.data.MetaRepository
 import es.msaezo.iptv.data.NetInfo
 import es.msaezo.iptv.data.PlaylistRepository
@@ -19,6 +20,8 @@ class IptvApp : Application() {
         private set
     lateinit var net: NetInfo
         private set
+    lateinit var epg: EpgRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -27,6 +30,7 @@ class IptvApp : Application() {
         playlists = PlaylistRepository(this, store, scope)
         meta = MetaRepository(this, store, playlists, scope)
         net = NetInfo(scope).also { it.refresh() }
+        epg = EpgRepository(playlists, store, scope)
     }
 
     companion object {

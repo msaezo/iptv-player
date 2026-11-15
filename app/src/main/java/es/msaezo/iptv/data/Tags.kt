@@ -81,7 +81,7 @@ object Tags {
     }
 
     /** Upper-case, accent-free words made of letters, digits and '+'. */
-    private fun tokens(s: String): List<String> {
+    fun tokens(s: String): List<String> {
         val f = fold(s)
         val out = ArrayList<String>(8)
         var start = -1
@@ -240,16 +240,45 @@ object Tags {
         return best
     }
 
-    /** Region of a live TV category, used for ordering: ES, UK, US or null. */
-    fun regionOfLiveGroup(group: String): String? {
-        val toks = tokens(group)
-        for (t in toks) when (t) {
-            "ES", "ESP", "SPAIN", "ESPANA", "SPANISH", "ESPANOL", "CASTELLANO", "MOVISTAR" -> return "ES"
-            "UK", "GB", "BRITISH", "ENGLAND", "SCOTLAND" -> return "UK"
-            "US", "USA", "AMERICA", "AMERICAN" -> return "US"
+    /**
+     * Country / language code that a category or channel name starts with, as written by
+     * the provider: "ES | …", "|UK| …", "FR: …", "AR - …". Upper-case, or null.
+     */
+    fun leadingCode(text: String): String? {
+        val f = fold(text)
+        val seg = segments(f).firstOrNull() ?: return null
+        val toks = seg.split(' ').filter { it.isNotEmpty() }
+        val first = toks.firstOrNull() ?: return null
+        if (first.length > 3 || first !in languageTokens) return null
+        val tagSegment = toks.size <= 3 && toks.all { it in languageTokens || it in noiseTokens || it in serviceTokens }
+        return if (tagSegment || first in safeEdgeCodes) first else null
+    }
+
+    /** ES / UK / US for those three, the provider's own code for other countries, or null. */
+    fun regionOf(group: String, name: String = ""): String? {
+        val code = leadingCode(group) ?: (if (name.isNotEmpty()) leadingCode(name) else null)
+        if (code != null) return when (code) {
+            "ES", "ESP", "SPA" -> "ES"
+            "UK", "GB", "ENG", "EN" -> "UK"
+            "US", "USA" -> "US"
+            else -> code
+        }
+        for (t in tokens(group)) when (t) {
+            "SPAIN", "ESPANA", "SPANISH", "ESPANOL", "CASTELLANO", "MOVISTAR" -> return "ES"
+            "BRITISH", "ENGLAND", "SCOTLAND" -> return "UK"
+            "USA", "AMERICA", "AMERICAN" -> return "US"
         }
         return null
     }
+
+    /** Name to show for a region code that isn't ES / UK / US ("FR" → French, "AR" → Arabic). */
+    fun regionLabel(code: String): String {
+        val lang = languageTokens[code]
+        return if (lang == null || lang == "en" || lang == "es") code else languageLabels[lang] ?: code
+    }
+
+    /** Region of a live TV category, used for ordering: ES, UK, US or null. */
+    fun regionOfLiveGroup(group: String): String? = regionOf(group)?.takeIf { it == "ES" || it == "UK" || it == "US" }
 
     /**
      * Key used to merge versions of the same title: lowercase, accents removed, provider

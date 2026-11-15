@@ -19,6 +19,7 @@ import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.data.Entry
 import es.msaezo.iptv.data.Episode
 import es.msaezo.iptv.data.Library
+import es.msaezo.iptv.data.LiveChannel
 import es.msaezo.iptv.data.Movie
 import es.msaezo.iptv.data.Show
 import es.msaezo.iptv.data.Tags
@@ -56,6 +57,7 @@ class Nav {
     var movieCategory by mutableIntStateOf(0)
     var showCategory by mutableIntStateOf(0)
     var liveCategory by mutableIntStateOf(0)
+    var liveFilter by mutableIntStateOf(0)
     var searchQuery by mutableStateOf("")
 
     val movieRows = LazyListState()
@@ -143,8 +145,19 @@ object Actions {
         return if (finished) show.episodes.getOrNull(idx + 1)?.let { it to false } else ep to true
     }
 
-    fun playLive(context: Context, channels: List<Entry>, index: Int) {
+    fun playLive(context: Context, channels: List<LiveChannel>, index: Int) {
         Preview.stop()
-        Playback.play(context, channels.map { it.toItem(it.title, it.group) }, index, live = true)
+        Playback.play(
+            context,
+            channels.map { ch ->
+                val best = ch.best
+                Playback.Item(
+                    url = best.url, title = ch.name, subtitle = ch.pack,
+                    userAgent = best.userAgent, referrer = best.referrer,
+                    alternatives = ch.versions.mapIndexed { i, v -> Playback.Alt(ch.labels[i], v.url) },
+                )
+            },
+            index, live = true,
+        )
     }
 }

@@ -207,6 +207,9 @@ class LibraryView(val library: Library, val filter: LibraryFilter) {
     val showCategories: List<Category<Show>> =
         categoriesOf(shows) { s -> s.episodes.flatMap { ep -> ep.versions.map { it.group } } + s.sources.map { it.group } }
 
+    /** Live TV by sport / country / events, built the first time Live TV is opened. */
+    val liveGuide: LiveGuide by lazy { LiveGuide(library.live) }
+
     // --- smart rows (worked out the first time a screen asks for them) -------------------
 
     val movieGenres: List<Category<Movie>> by lazy {

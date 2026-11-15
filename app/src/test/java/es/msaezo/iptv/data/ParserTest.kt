@@ -88,3 +88,40 @@ class LanguageTest {
         assertEquals(null, Tags.genreOfGroup("ORIGINAL AMAZON 4K MULTI"))
     }
 }
+
+class LiveGuideTest {
+    private fun live(name: String, group: String, url: String) =
+        Entry(title = name, rawName = name, url = url, logo = null, group = group, tvgId = null, type = ContentType.LIVE)
+
+    private val guide = LiveGuide(listOf(
+        live("FR: Canal+ Sport HD", "FR | SPORTS", "u1"),
+        live("AR: beIN Sports 1 HD", "AR | BEIN SPORTS", "u2"),
+        live("ES | La 1 HD", "ES | GENERALISTAS", "u3"),
+        live("ES | La 1 FHD", "ES | GENERALISTAS", "u4"),
+        live("ES | La 1 4K (HEVC)", "ES | GENERALISTAS", "u5"),
+        live("M+ Liga Endesa HD", "ES | DEPORTES", "u6"),
+        live("Movistar Tenis ATP HD", "ES | DEPORTES", "u7"),
+        live("EVENTO 01: Real Madrid vs Barcelona 21:00", "ES | EVENTOS", "u8"),
+        live("EVENTO 02", "ES | EVENTOS", "u9"),
+    ))
+
+    @Test fun qualitiesMergeBestFirst() {
+        val la1 = guide.channelOf("u3")!!
+        assertEquals("La 1", la1.name)
+        assertEquals(listOf("u5", "u4", "u3"), la1.versions.map { it.url })
+    }
+
+    @Test fun regionsAndSports() {
+        assertEquals("FR", guide.channelOf("u1")!!.region)
+        assertEquals("AR", guide.channelOf("u2")!!.region)
+        assertEquals("Basketball", guide.channelOf("u6")!!.sport)
+        assertEquals("Tennis", guide.channelOf("u7")!!.sport)
+        val sports = guide.sections.first { it.name == "Sports" }.filters.first().items
+        assertEquals("ES", sports.first().region) // Spain before French / Arabic packs
+    }
+
+    @Test fun events() {
+        assertEquals(true, guide.channelOf("u8")!!.announced)
+        assertEquals(false, guide.channelOf("u9")!!.announced)
+    }
+}

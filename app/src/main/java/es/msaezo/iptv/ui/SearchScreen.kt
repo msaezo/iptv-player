@@ -39,6 +39,8 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val known by app.meta.known.collectAsState()
     val store = app.store
     val favorites by store.favorites.collectAsState()
+    val nowNext by app.epg.guide.collectAsState()
+    val guide = rememberLiveGuide(view)
     var results by remember { mutableStateOf<LibraryView.SearchResults?>(null) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(200); runCatching { focus.requestFocus() } }
@@ -85,11 +87,16 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                     ShowCard(s, known[s.id], cardWidth) { nav.open(Route.ShowDetail(s.id)) }
                 }
             }
-            if (r.live.isNotEmpty()) item { SectionTitle("Live TV") }
-            itemsIndexed(r.live) { i, ch ->
-                ChannelRow(i + 1, ch, "l:${ch.url}" in favorites,
-                    onFavorite = { store.toggleFavorite("l:${ch.url}") },
-                    onClick = { Actions.playLive(context, r.live, i) })
+            val channels = guide?.let { g -> r.live.mapNotNull { g.channelOf(it.url) }.distinct() }.orEmpty()
+            if (channels.isNotEmpty()) item { SectionTitle("Live TV") }
+            itemsIndexed(channels) { i, ch ->
+                val fav = "l:${ch.id}" in favorites || ch.versions.any { "l:${it.url}" in favorites }
+                ChannelRow(i + 1, ch, nowNext[ch.id], fav,
+                    onFavorite = {
+                        val legacy = ch.versions.map { "l:${it.url}" }.filter { it in favorites }
+                        if (legacy.isNotEmpty()) legacy.forEach(store::toggleFavorite) else store.toggleFavorite("l:${ch.id}")
+                    },
+                    onClick = { Actions.playLive(context, channels, i) })
             }
         }
     }

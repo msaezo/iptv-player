@@ -41,6 +41,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import es.msaezo.iptv.IptvApp
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import es.msaezo.iptv.data.NowNext
+import es.msaezo.iptv.data.LiveSection
+import es.msaezo.iptv.data.LiveGuide
+import es.msaezo.iptv.data.LiveChannel
 import es.msaezo.iptv.data.Category
 import es.msaezo.iptv.data.Entry
 import es.msaezo.iptv.data.Collections
@@ -231,77 +242,157 @@ fun CategoryScreen(route: Route.CategoryRoute, view: LibraryView, nav: Nav, wide
     }
 }
 
+/** Favourites are stored per channel; older ones were stored per stream and still count. */
+private fun isFavorite(ch: LiveChannel, favorites: Set<String>) =
+    "l:${ch.id}" in favorites || ch.versions.any { "l:${it.url}" in favorites }
+
+private fun toggleFavorite(ch: LiveChannel, favorites: Set<String>) {
+    val store = IptvApp.instance.store
+    val legacy = ch.versions.map { "l:${it.url}" }.filter { it in favorites }
+    if (legacy.isNotEmpty()) legacy.forEach(store::toggleFavorite) else store.toggleFavorite("l:${ch.id}")
+}
+
+@Composable
+fun rememberLiveGuide(view: LibraryView): LiveGuide? {
+    val guide by produceState<LiveGuide?>(null, view) {
+        value = withContext(Dispatchers.Default) { view.liveGuide }
+    }
+    return guide
+}
+
 @Composable
 fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val store = IptvApp.instance.store
     val favorites by store.favorites.collectAsState()
     val recent by store.recentLive.collectAsState()
-    val categories = remember(view, favorites, recent) {
-        val extra = ArrayList<Category<Entry>>()
-        val favs = view.live.filter { "l:${it.url}" in favorites }.distinctBy { it.url }
-        if (favs.isNotEmpty()) extra += Category("★ Favorites", favs)
-        val byUrl = view.live.associateBy { it.url }
-        val rec = recent.mapNotNull { byUrl[it] }
-        if (rec.isNotEmpty()) extra += Category("Recently watched", rec)
-        extra + view.liveCategories
+    val nowNext by IptvApp.instance.epg.guide.collectAsState()
+    val guide = rememberLiveGuide(view)
+    if (guide == null) {
+        CenterMessage("Organising channels…", loading = true); return
+    }
+    val sections = remember(guide, favorites, recent) {
+        val extra = ArrayList<LiveSection>()
+        val favs = guide.channels.filter { isFavorite(it, favorites) }
+        if (favs.isNotEmpty()) extra += LiveSection("★ Favorites", listOf(Category(LiveGuide.ALL, favs)))
+        val rec = recent.mapNotNull { guide.channelOf(it) }.distinct()
+        if (rec.isNotEmpty()) extra += LiveSection("Recently watched", listOf(Category(LiveGuide.ALL, rec)))
+        extra + guide.sections
+    }
+    val menu = remember(sections) {
+        sections.map { s ->
+            val all = s.filters.firstOrNull { it.name == LiveGuide.ALL }?.items
+            Category(s.name, all ?: s.filters.flatMap { it.items })
+        }
     }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    CategoryLayout(categories, nav.liveCategory, {
-        nav.liveCategory = it; scope.launch { nav.liveList.scrollToItem(0) }
+    CategoryLayout(menu, nav.liveCategory, {
+        nav.liveCategory = it; nav.liveFilter = 0; scope.launch { nav.liveList.scrollToItem(0) }
     }, wide) { cat ->
-        LazyColumn(
-            state = nav.liveList,
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            itemsIndexed(cat.items) { i, ch ->
-                ChannelRow(i + 1, ch, "l:${ch.url}" in favorites,
-                    onFavorite = { store.toggleFavorite("l:${ch.url}") },
-                    onClick = { Actions.playLive(context, cat.items, i) })
+        val section = sections.firstOrNull { it.name == cat.name } ?: return@CategoryLayout
+        val filter = section.filters[nav.liveFilter.coerceIn(0, section.filters.size - 1)]
+        Column(Modifier.fillMaxSize()) {
+            if (section.filters.size > 1) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    itemsIndexed(section.filters) { i, f ->
+                        Pill("${f.name}  ${f.items.size}", i == nav.liveFilter) {
+                            nav.liveFilter = i; scope.launch { nav.liveList.scrollToItem(0) }
+                        }
+                    }
+                }
+            }
+            LazyColumn(
+                state = nav.liveList,
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                itemsIndexed(filter.items, key = { _, ch -> ch.id }) { i, ch ->
+                    ChannelRow(i + 1, ch, nowNext[ch.id], isFavorite(ch, favorites),
+                        onFavorite = { toggleFavorite(ch, favorites) },
+                        onClick = { Actions.playLive(context, filter.items, i) })
+                }
             }
         }
     }
 }
 
+private val clock = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT)
+private fun hhmm(ms: Long): String = synchronized(clock) { clock.format(java.util.Date(ms)) }
+
 @Composable
-fun ChannelRow(number: Int, ch: Entry, favorite: Boolean, onFavorite: () -> Unit, onClick: () -> Unit) {
+fun ChannelRow(
+    number: Int,
+    ch: LiveChannel,
+    guide: NowNext?,
+    favorite: Boolean,
+    onFavorite: () -> Unit,
+    onClick: () -> Unit,
+) {
+    // Ask for the programme guide only once the row has stayed on screen for a moment.
+    LaunchedEffect(ch.id) {
+        delay(350)
+        IptvApp.instance.epg.request(ch)
+    }
+    val quiet = ch.isEvent && !ch.announced && guide?.now == null
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier
                 .weight(1f)
-                .tvClickable(Square, 1.02f, onClick)
-                .background(Color(0xFF181818), Square)
+                .tvClickable(Square, 1.015f, onClick)
+                .background(Color(0xFF161616), Square)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "$number", modifier = Modifier.width(44.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text("$number", modifier = Modifier.width(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall)
             Box(
-                Modifier.size(width = 64.dp, height = 40.dp).clip(Square)
-                    .background(Color(0x22FFFFFF)),
+                Modifier.size(width = 60.dp, height = 38.dp).background(Color(0xFF262626)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (ch.logo != null) {
-                    AsyncImage(ch.logo, ch.title, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
+                    AsyncImage(ch.logo, ch.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
                 }
             }
             Spacer(Modifier.width(14.dp))
-            Text(ch.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-            if (ch.quality != null) {
-                Text(ch.quality, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
+                    color = if (quiet) Color(0xFF8A8A8A) else Color.White,
+                )
+                val now = guide?.now
+                val next = guide?.next
+                val line = when {
+                    now != null -> "Now  ${now.title}  ·  until ${hhmm(now.end)}" +
+                        (next?.let { "     Next  ${it.title}" } ?: "")
+                    next != null -> "${hhmm(next.start)}  ${next.title}"
+                    quiet -> "No event announced"
+                    else -> null
+                }
+                if (line != null) {
+                    Text(
+                        line, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (now != null) Color(0xFFD0D0D0) else Color(0xFF8A8A8A),
+                    )
+                }
+            }
+            if (ch.versions.size > 1 || ch.labels.first() != "Standard") {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    ch.labels.joinToString("  ·  ") { it.substringBefore(' ') }, maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall,
+                )
             }
         }
         Spacer(Modifier.width(6.dp))
-        Box(
-            Modifier.tvClickable(Square, 1.1f, onFavorite).padding(10.dp),
-        ) {
+        Box(Modifier.tvClickable(Square, 1.1f, onFavorite).padding(8.dp)) {
             Icon(
                 if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                contentDescription = "Favorite",
+                contentDescription = "Favorite", modifier = Modifier.size(20.dp),
                 tint = if (favorite) Gold else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

@@ -59,7 +59,11 @@ object Playback {
         val userAgent: String? = null,
         val referrer: String? = null,
         val startPositionMs: Long = 0L,
+        /** Live TV: the same channel in other qualities (best first; includes [url]). */
+        val alternatives: List<Alt> = emptyList(),
     )
+
+    data class Alt(val label: String, val url: String)
 
     var queue: List<Item> = emptyList()
         private set
@@ -92,6 +96,8 @@ class PlayerActivity : ComponentActivity() {
     private val store get() = IptvApp.instance.store
     private var live = false
     private var liveRetries = 0
+    /** Which quality of the current live channel is playing (index into its alternatives). */
+    private var liveAlt = 0
     private var errorDialog: AlertDialog? = null
 
     private val hideOverlay = Runnable { infoText.visibility = View.GONE }
@@ -155,9 +161,9 @@ class PlayerActivity : ComponentActivity() {
         // Left / right on the progress bar also move one minute (the default was 1/20 of the film).
         playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.setKeyTimeIncrement(JUMP_MS)
 
-        // Keep the progress line and the buttons away from the edges: 15% free on each side.
+        // Keep the progress line and the buttons away from the edges: 5% free on each side.
         runCatching {
-            val side = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.15f).toInt()
+            val side = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.05f).toInt()
             for (id in intArrayOf(androidx.media3.ui.R.id.exo_bottom_bar, androidx.media3.ui.R.id.exo_progress)) {
                 val v = playerView.findViewById<View>(id) ?: continue
                 val lp = v.layoutParams as? ViewGroup.MarginLayoutParams ?: continue
@@ -289,13 +295,31 @@ class PlayerActivity : ComponentActivity() {
         val q = Playback.queue
         val i = ((index % q.size) + q.size) % q.size
         Playback.moveTo(i)
-        val item = q[i]
+        liveAlt = 0
+        store.addRecentLive(q[i].url)
+        startLive()
+    }
+
+    /** (Re)starts the current live channel in the quality chosen by [liveAlt]. */
+    private fun startLive() {
+        val item = Playback.queue[Playback.index]
+        val alts = item.alternatives
+        val alt = alts.getOrNull(liveAlt)
         liveRetries = 0
-        player.setMediaItem(toMediaItem(item))
+        player.setMediaItem(toMediaItem(if (alt != null) item.copy(url = alt.url) else item))
         player.prepare()
         player.playWhenReady = true
-        store.addRecentLive(item.url)
-        showOverlay("${i + 1}  ${item.title}")
+        val quality = if (alts.size > 1 && alt != null) "   ·   ${alt.label}   ◀ ▶" else ""
+        showOverlay("${Playback.index + 1}  ${item.title}$quality")
+    }
+
+    /** Left / right on live TV: same channel, another quality. */
+    private fun switchQuality(step: Int): Boolean {
+        val alts = Playback.queue[Playback.index].alternatives
+        if (alts.size < 2) return false
+        liveAlt = ((liveAlt + step) % alts.size + alts.size) % alts.size
+        startLive()
+        return true
     }
 
     private fun currentUrl(): String =
@@ -317,6 +341,15 @@ class PlayerActivity : ComponentActivity() {
         }
         // Network hiccups and provider refusals (odd HTTP codes such as 458) are often gone a
         // moment later, typically once the provider has noticed the previous stream closed.
+        // A live channel that won't start in this quality may still work in another one.
+        if (live && liveRetries >= 3) {
+            val alts = Playback.queue[Playback.index].alternatives
+            if (liveAlt + 1 < alts.size) {
+                liveAlt++
+                startLive()
+                return
+            }
+        }
         val network = error.errorCode in 2000..2999
         if ((live || network) && liveRetries < 3) {
             liveRetries++
@@ -389,10 +422,10 @@ class PlayerActivity : ComponentActivity() {
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (!live) {
                     player.seekBack(); playerView.showController(); return true
-                }
+                } else if (switchQuality(-1)) return true
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (!live) {
                     player.seekForward(); playerView.showController(); return true
-                }
+                } else if (switchQuality(1)) return true
             }
         }
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK &&

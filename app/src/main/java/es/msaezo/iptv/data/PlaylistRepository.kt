@@ -52,6 +52,8 @@ class PlaylistRepository(
     private var job: Job? = null
     private val xtream = XtreamClient(File(context.filesDir, "xtream")) { store.userAgent.value }
     @Volatile private var account: XtreamAccount? = null
+    /** The provider login behind the current catalogue, when it came from an Xtream panel. */
+    val xtreamAccount: XtreamAccount? get() = account
     @Volatile private var current: Snapshot? = null
     private val episodeCache = java.util.concurrent.ConcurrentHashMap<String, Show>()
 
