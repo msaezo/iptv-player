@@ -55,6 +55,7 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.PlayerView
 import es.msaezo.iptv.IptvApp
+import es.msaezo.iptv.ui.tr
 
 /** What to play. Kept in memory because channel lists can be too big for an Intent. */
 object Playback {
@@ -341,7 +342,7 @@ class PlayerActivity : ComponentActivity() {
             player.prepare()
             player.playWhenReady = true
             if (first.startPositionMs > 0) {
-                Toast.makeText(this, "Resuming from ${formatTime(first.startPositionMs)}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, tr("Resuming from ${formatTime(first.startPositionMs)}"), Toast.LENGTH_SHORT).show()
             }
             showOverlay(first.subtitle ?: first.title)
         }
@@ -413,7 +414,7 @@ class PlayerActivity : ComponentActivity() {
         else player.currentMediaItem?.mediaId ?: Playback.queue[Playback.index].url
 
     private fun showOverlay(text: String) {
-        infoText.text = text
+        infoText.text = tr(text)
         infoText.visibility = View.VISIBLE
         handler.removeCallbacks(hideOverlay)
         handler.postDelayed(hideOverlay, 3500)
@@ -455,11 +456,11 @@ class PlayerActivity : ComponentActivity() {
         }
         errorDialog?.dismiss()
         errorDialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Can't play this stream")
-            .setMessage(message)
-            .setPositiveButton("Retry") { _, _ -> liveRetries = 0; player.prepare(); player.playWhenReady = true }
-            .setNeutralButton("Open in other player") { _, _ -> openExternal() }
-            .setNegativeButton("Close") { _, _ -> finish() }
+            .setTitle(tr("Can't play this stream"))
+            .setMessage(tr(message))
+            .setPositiveButton(tr("Retry")) { _, _ -> liveRetries = 0; player.prepare(); player.playWhenReady = true }
+            .setNeutralButton(tr("Open in other player")) { _, _ -> openExternal() }
+            .setNegativeButton(tr("Close")) { _, _ -> finish() }
             .show()
     }
 
@@ -467,9 +468,9 @@ class PlayerActivity : ComponentActivity() {
         val url = currentUrl()
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(url), "video/*")
         try {
-            startActivity(Intent.createChooser(intent, "Open with"))
+            startActivity(Intent.createChooser(intent, tr("Open with")))
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(this, "No other video player installed (try VLC)", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, tr("No other video player installed (try VLC)"), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -523,7 +524,7 @@ class PlayerActivity : ComponentActivity() {
         if (state == Hint.NONE) {
             hintText.visibility = View.GONE
         } else {
-            hintText.text = text
+            hintText.text = tr(text)
             hintText.visibility = View.VISIBLE
         }
     }

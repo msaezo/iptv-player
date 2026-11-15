@@ -63,7 +63,7 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                 onValueChange = { nav.searchQuery = it },
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
-                placeholder = { Text("Search channels, movies, shows…") },
+                placeholder = { Text(tr("Search channels, movies, shows…")) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             )
@@ -71,11 +71,11 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
         val r = results
         if (r == null) {
             item {
-                Text("Type at least 2 letters. Accents don't matter.",
+                Text(tr("Type at least 2 letters. Accents don't matter."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else if (r.isEmpty) {
-            item { Text("No results for “${nav.searchQuery}”") }
+            item { Text(tr("No results for “${nav.searchQuery}”")) }
         } else {
             item {
                 PosterRow("Movies", r.movies) { m ->

@@ -111,7 +111,7 @@ fun MainScreen() {
                             selected = nav.tab == t && nav.stack.isEmpty(),
                             onClick = { nav.select(t) },
                             icon = { Icon(t.icon, t.label) },
-                            label = { Text(t.label, maxLines = 1) },
+                            label = { Text(tr(t.label), maxLines = 1) },
                             alwaysShowLabel = false,
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Color.White,

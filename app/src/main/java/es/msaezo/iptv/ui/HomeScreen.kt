@@ -269,10 +269,9 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                     .background(Color(0xFF1A1A1A), Square)
                     .padding(18.dp)
             ) {
-                Text("Unlock collections & ratings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(tr("Unlock collections & ratings"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Add a free TMDB key (and OMDb for Rotten Tomatoes / IMDb) in Settings to get rows like " +
-                        "Trending, Best Picture winners or On Netflix, plus synopses and backdrops.",
+                    tr("Add a free TMDB key (and OMDb for Rotten Tomatoes / IMDb) in Settings to get rows like Trending, Best Picture winners or On Netflix, plus synopses and backdrops."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -296,12 +295,12 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = pad, vertical = 12.dp)) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Brand)
                     Spacer(Modifier.width(12.dp))
-                    Text("Finding your collections…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tr("Finding your collections…"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else if (tmdbKey.isNotBlank() && collections.isEmpty() && metaError != null) {
             item {
-                Text("TMDB: $metaError", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = pad))
+                Text(tr("TMDB: $metaError"), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = pad))
             }
         }
 
@@ -375,12 +374,12 @@ private fun OnNowCard(ch: LiveChannel, guide: NowNext?, note: String?, width: Dp
             Text(ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
             val now = guide?.now
             Text(
-                note ?: now?.title ?: guide?.next?.let { "${hhmm(it.start)}  ${it.title}" } ?: "Live",
+                note?.let { tr(it) } ?: now?.title ?: guide?.next?.let { "${hhmm(it.start)}  ${it.title}" } ?: tr("Live"),
                 maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color(0xFFD0D0D0),
                 style = MaterialTheme.typography.bodySmall,
             )
             if (now != null && note == null) {
-                Text("until ${hhmm(now.end)}", color = Color(0xFF8A8A8A), style = MaterialTheme.typography.labelSmall)
+                Text(tr("until ${hhmm(now.end)}"), color = Color(0xFF8A8A8A), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -468,7 +467,7 @@ private fun Hero(list: List<Featured>, known: Map<String, TmdbItem>, wide: Boole
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        if (f is Featured.S) "SERIES" else "FILM",
+                        tr(if (f is Featured.S) "SERIES" else "FILM"),
                         color = Color(0xFFCCCCCC), fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp,
                         style = MaterialTheme.typography.labelMedium,
                     )

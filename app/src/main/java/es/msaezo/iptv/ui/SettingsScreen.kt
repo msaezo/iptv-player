@@ -58,14 +58,14 @@ private fun Section(title: String, content: @Composable () -> Unit) {
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(tr(title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         content()
     }
 }
 
 @Composable
 private fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(tr(text), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -114,6 +114,28 @@ fun SettingsScreen(wide: Boolean) {
     ) {
         item {
             Column(Modifier.widthIn(max = 900.dp)) {
+                Section("App language") {
+                    val language by store.language.collectAsState()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for ((code, label) in listOf("en" to "English", "es" to "Español")) {
+                            // Language names are shown in their own language, never translated.
+                            Text(
+                                label,
+                                color = if (language == code) Color.Black else Color.White,
+                                fontWeight = if (language == code) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier
+                                    .tvClickable(Square, 1.06f) { store.setLanguage(code); I18n.lang = code }
+                                    .background(if (language == code) Color.White else Color(0x26FFFFFF), Square)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Your connection") {
                     val loc = location
                     when {
@@ -138,8 +160,8 @@ fun SettingsScreen(wide: Boolean) {
                 Section("Playlist (M3U)") {
                     OutlinedTextField(
                         value = url, onValueChange = { url = it },
-                        label = { Text("M3U URL") },
-                        placeholder = { Text("http://provider.com/get.php?username=…&type=m3u_plus") },
+                        label = { Text(tr("M3U URL")) },
+                        placeholder = { Text(tr("http://provider.com/get.php?username=…&type=m3u_plus")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -161,7 +183,7 @@ fun SettingsScreen(wide: Boolean) {
                     if (refreshing != null) {
                         Hint("Refreshing in the background: $refreshing  (you can keep using the app)")
                     } else if (refreshError != null) {
-                        Text("Refresh failed, still showing the saved catalogue: $refreshError",
+                        Text(tr("Refresh failed, still showing the saved catalogue: $refreshError"),
                             color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     } else if (lastUpdated > 0) {
                         val h = (System.currentTimeMillis() - lastUpdated) / 3_600_000L
@@ -194,7 +216,7 @@ fun SettingsScreen(wide: Boolean) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(checked = checked, onCheckedChange = null)
-                            Text(Tags.languageLabels[code] ?: code.uppercase(), Modifier.weight(1f))
+                            Text(tr(Tags.languageLabels[code] ?: code.uppercase()), Modifier.weight(1f))
                             counts[code]?.let { Hint("$it") }
                         }
                     }
@@ -207,16 +229,16 @@ fun SettingsScreen(wide: Boolean) {
                 Section("Collections & ratings") {
                     Hint("TMDB (free): themoviedb.org → Settings → API → request a key. Paste the API key or the read access token.")
                     OutlinedTextField(
-                        value = tmdb, onValueChange = { tmdb = it }, label = { Text("TMDB API key") },
+                        value = tmdb, onValueChange = { tmdb = it }, label = { Text(tr("TMDB API key")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     Hint("OMDb (free, 1000/day): omdbapi.com/apikey.aspx — adds Rotten Tomatoes, IMDb and Metacritic scores.")
                     OutlinedTextField(
-                        value = omdb, onValueChange = { omdb = it }, label = { Text("OMDb API key") },
+                        value = omdb, onValueChange = { omdb = it }, label = { Text(tr("OMDb API key")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     ActionButton("Save keys", null, true) { store.setTmdbKey(tmdb); store.setOmdbKey(omdb) }
-                    if (metaError != null) Text("Last error: $metaError", color = MaterialTheme.colorScheme.error)
+                    if (metaError != null) Text(tr("Last error: $metaError"), color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -231,19 +253,19 @@ fun SettingsScreen(wide: Boolean) {
                     ) {
                         Checkbox(checked = preview, onCheckedChange = null)
                         Column(Modifier.weight(1f)) {
-                            Text("Preview on a title's page")
+                            Text(tr("Preview on a title's page"))
                             Hint("Plays the opening minutes without sound behind the title. Uses your stream connection while it runs.")
                         }
                     }
                     val audioOffset by store.audioOffset.collectAsState()
-                    Text("Audio sync", fontWeight = FontWeight.Bold)
+                    Text(tr("Audio sync"), fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         ActionButton("−", null, false) { store.setAudioOffset(audioOffset - UserStore.AUDIO_OFFSET_STEP) }
                         Text(
                             when {
                                 audioOffset == 0 -> "0 ms"
-                                audioOffset > 0 -> "+$audioOffset ms  ·  sound later"
-                                else -> "$audioOffset ms  ·  sound earlier"
+                                audioOffset > 0 -> tr("+$audioOffset ms  ·  sound later")
+                                else -> tr("$audioOffset ms  ·  sound earlier")
                             },
                             fontWeight = FontWeight.Medium,
                         )
@@ -252,7 +274,7 @@ fun SettingsScreen(wide: Boolean) {
                     }
                     Hint("If lips and sound don't match: sound arriving late needs a negative value. While a film is playing, up / down on the remote changes it in 25 ms steps (limit ±500 ms).")
                     val liveBuffer by store.liveBuffer.collectAsState()
-                    Text("Live TV buffer", fontWeight = FontWeight.Bold)
+                    Text(tr("Live TV buffer"), fontWeight = FontWeight.Bold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for ((sec, label) in listOf(0 to "Fast start", 10 to "10 seconds", 20 to "20 seconds", 30 to "30 seconds")) {
                             Pill(label, liveBuffer == sec) { store.setLiveBuffer(sec) }
@@ -261,7 +283,7 @@ fun SettingsScreen(wide: Boolean) {
                     Hint("Loads this much ahead before a channel starts, so a busy server (a big match) is less likely to make it stop. The channel takes that long to appear and you watch that far behind live.")
                     Hint("Some providers only accept certain players. Change the user agent if streams refuse to play.")
                     OutlinedTextField(
-                        value = ua, onValueChange = { ua = it }, label = { Text("User agent") },
+                        value = ua, onValueChange = { ua = it }, label = { Text(tr("User agent")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -283,7 +305,7 @@ fun SettingsScreen(wide: Boolean) {
                         ),
                     ) {
                         Text(
-                            "This is how subtitles will look",
+                            tr("This is how subtitles will look"),
                             color = Color.White,
                             fontFamily = if (sub.serif) SubtitleSerif else null,
                             fontSize = (15 * sub.size / 100f).sp,
@@ -298,27 +320,27 @@ fun SettingsScreen(wide: Boolean) {
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
-                    Text("Font", fontWeight = FontWeight.Bold)
+                    Text(tr("Font"), fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Pill("Serif", sub.serif) { store.setSubtitles(sub.copy(serif = true)) }
                         Pill("Sans", !sub.serif) { store.setSubtitles(sub.copy(serif = false)) }
                     }
-                    Text("Size", fontWeight = FontWeight.Bold)
+                    Text(tr("Size"), fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         ActionButton("−", null, false) { store.setSubtitles(sub.copy(size = sub.size - 10)) }
                         Text("${sub.size}%", fontWeight = FontWeight.Medium)
                         ActionButton("+", null, false) { store.setSubtitles(sub.copy(size = sub.size + 10)) }
                     }
-                    Text("Background", fontWeight = FontWeight.Bold)
+                    Text(tr("Background"), fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Pill("None", sub.background == 0) { store.setSubtitles(sub.copy(background = 0)) }
                         Pill("Soft", sub.background == 1) { store.setSubtitles(sub.copy(background = 1)) }
                         Pill("Dark", sub.background == 2) { store.setSubtitles(sub.copy(background = 2)) }
                     }
-                    Text("Height on screen", fontWeight = FontWeight.Bold)
+                    Text(tr("Height on screen"), fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         ActionButton("Lower", null, false) { store.setSubtitles(sub.copy(position = sub.position - 1)) }
-                        Text("${sub.position}% from the bottom", fontWeight = FontWeight.Medium)
+                        Text(tr("${sub.position}% from the bottom"), fontWeight = FontWeight.Medium)
                         ActionButton("Higher", null, false) { store.setSubtitles(sub.copy(position = sub.position + 1)) }
                     }
                     Hint("Applies from the next thing you play.")
@@ -336,7 +358,7 @@ fun SettingsScreen(wide: Boolean) {
                         for (f in follow) Pill("$f  ×", false) { store.setFollow(follow - f) }
                     }
                     OutlinedTextField(
-                        value = name, onValueChange = { name = it }, label = { Text("Team or player") },
+                        value = name, onValueChange = { name = it }, label = { Text(tr("Team or player")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     ActionButton("Add", null, true) {
@@ -358,7 +380,7 @@ fun SettingsScreen(wide: Boolean) {
                     val scope = rememberCoroutineScope()
                     DisposableEffect(Unit) { onDispose { Transfer.stop() } }
                     Hint("Copies everything (playlist, keys, lists, what you were watching, these settings) to TUTV on another device on the same Wi-Fi. It is a one-time copy, not a live sync.")
-                    Text("1 · On the device that has everything", fontWeight = FontWeight.Bold)
+                    Text(tr("1 · On the device that has everything"), fontWeight = FontWeight.Bold)
                     val shared = sharing
                     if (shared == null) {
                         ActionButton("Share from this device", null, false) {
@@ -367,21 +389,21 @@ fun SettingsScreen(wide: Boolean) {
                             sharing = if (ip != null && Transfer.start(store.export(), pin)) "$ip|$pin" else "error"
                         }
                     } else if (shared == "error") {
-                        Text("Couldn't start sharing. Is this device on Wi-Fi?", color = MaterialTheme.colorScheme.error)
+                        Text(tr("Couldn't start sharing. Is this device on Wi-Fi?"), color = MaterialTheme.colorScheme.error)
                         ActionButton("Try again", null, false) { sharing = null }
                     } else {
-                        Text("Address   ${shared.substringBefore('|')}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("Code   ${shared.substringAfter('|')}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(tr("Address   ${shared.substringBefore('|')}"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(tr("Code   ${shared.substringAfter('|')}"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Hint("Keep this screen open while the other device copies.")
                         ActionButton("Stop sharing", null, false) { Transfer.stop(); sharing = null }
                     }
-                    Text("2 · On the new device", fontWeight = FontWeight.Bold)
+                    Text(tr("2 · On the new device"), fontWeight = FontWeight.Bold)
                     OutlinedTextField(
-                        value = address, onValueChange = { address = it }, label = { Text("Address shown on the other device") },
+                        value = address, onValueChange = { address = it }, label = { Text(tr("Address shown on the other device")) },
                         placeholder = { Text("192.168.1.34") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
-                        value = code, onValueChange = { code = it }, label = { Text("Code") },
+                        value = code, onValueChange = { code = it }, label = { Text(tr("Code")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     ActionButton("Copy to this device", null, true) {

@@ -197,7 +197,7 @@ fun ItemsScreen(route: Route.ItemsRoute, nav: Nav, wide: Boolean) {
         modifier = Modifier.fillMaxSize(),
     ) {
         item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-            Text(route.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(tr(route.title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         items(list) { x ->
             when (x) {
@@ -211,10 +211,10 @@ fun ItemsScreen(route: Route.ItemsRoute, nav: Nav, wide: Boolean) {
 @Composable
 fun ScreenTitle(title: String, subtitle: String?, pad: androidx.compose.ui.unit.Dp) {
     Row(Modifier.padding(start = pad, end = pad, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(tr(title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         if (subtitle != null) {
             Spacer(Modifier.width(12.dp))
-            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+            Text(tr(subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
         }
     }
 }
@@ -232,7 +232,7 @@ fun CategoryScreen(route: Route.CategoryRoute, view: LibraryView, nav: Nav, wide
         modifier = Modifier.fillMaxSize(),
     ) {
         item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-            Text(route.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(tr(route.name), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         if (route.series) {
             val list = view.showCategories.firstOrNull { it.name == route.name }?.items.orEmpty()
@@ -412,7 +412,7 @@ private fun ProgrammeLane(guide: NowNext?, quiet: Boolean, nowMs: Long, windowSt
                     else -> "No programme information"
                 }
                 Text(
-                    note, Modifier.padding(start = 10.dp), maxLines = 1,
+                    tr(note), Modifier.padding(start = 10.dp), maxLines = 1,
                     color = Color(0xFF6E6E6E), style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -500,7 +500,7 @@ fun ChannelRow(
                     }
                     if (line != null) {
                         Text(
-                            line, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            tr(line), maxLines = 1, overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (!timeline && now != null) Color(0xFFD0D0D0) else Color(0xFF8A8A8A),
                         )

@@ -27,6 +27,7 @@ class IptvApp : Application() {
         super.onCreate()
         instance = this
         store = UserStore(this)
+        es.msaezo.iptv.ui.I18n.lang = store.language.value
         playlists = PlaylistRepository(this, store, scope)
         meta = MetaRepository(this, store, playlists, scope)
         net = NetInfo(scope).also { it.refresh() }

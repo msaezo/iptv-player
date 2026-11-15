@@ -201,7 +201,7 @@ fun PosterCard(
         )
         if (subtitle != null) {
             Text(
-                subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                tr(subtitle), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -259,7 +259,7 @@ fun CollectionTile(title: String, count: Int, image: String?, modifier: Modifier
         )
         Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
             Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 2)
-            Text("$count titles", color = Color(0xCCFFFFFF), fontSize = 12.sp)
+            Text(tr("$count titles"), color = Color(0xCCFFFFFF), fontSize = 12.sp)
         }
     }
 }
@@ -267,7 +267,7 @@ fun CollectionTile(title: String, count: Int, image: String?, modifier: Modifier
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
-        text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+        tr(text), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
         modifier = modifier.padding(vertical = 8.dp),
     )
 }
@@ -286,7 +286,7 @@ fun CenterMessage(text: String, loading: Boolean = false, action: (@Composable (
                 Spacer(Modifier.height(20.dp))
             }
             Text(
-                text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
+                tr(text), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
                 color = if (loading) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
             )
             if (action != null) {
@@ -313,7 +313,7 @@ fun Pill(text: String, selected: Boolean, icon: ImageVector? = null, onClick: ()
             Spacer(Modifier.width(8.dp))
         }
         Text(
-            text, maxLines = 1, overflow = TextOverflow.Ellipsis, color = color,
+            tr(text), maxLines = 1, overflow = TextOverflow.Ellipsis, color = color,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         )
     }
@@ -374,7 +374,7 @@ fun SeeAllCard(width: Dp, ratio: Float, onClick: () -> Unit) {
             .border(1.dp, Color(0x33FFFFFF), Square),
         contentAlignment = Alignment.Center,
     ) {
-        Text("See all ›", color = Color.White, fontWeight = FontWeight.Bold)
+        Text(tr("See all ›"), color = Color.White, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -431,7 +431,7 @@ fun <T> CategoryLayout(
                             Spacer(Modifier.width(12.dp))
                         }
                         Text(
-                            c.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            tr(c.name), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                         )
                         Text(
@@ -469,7 +469,7 @@ fun <T> PosterRow(
     if (list.isEmpty()) return
     Column {
         Text(
-            title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+            tr(title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
             color = Color(0xFFE5E5E5),
             modifier = Modifier.padding(start = startPadding, top = 14.dp, bottom = 6.dp),
         )

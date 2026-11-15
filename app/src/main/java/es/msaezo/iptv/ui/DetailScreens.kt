@@ -124,7 +124,7 @@ fun ActionButton(
             Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, color = color, fontWeight = FontWeight.Bold)
+        Text(tr(text), color = color, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -157,8 +157,8 @@ private fun metaLine(year: Int?, details: MetaDetails?, extra: String? = null): 
     listOfNotNull(
         year?.toString() ?: details?.item?.year?.toString(),
         details?.runtime?.let { "${it / 60}h ${it % 60}m".removePrefix("0h ") },
-        details?.seasons?.let { "$it season${if (it == 1) "" else "s"}" },
-        extra,
+        details?.seasons?.let { tr("$it season${if (it == 1) "" else "s"}") },
+        extra?.let { tr(it) },
         details?.genres?.takeIf { it.isNotEmpty() }?.take(3)?.joinToString(", "),
     ).joinToString("  ·  ")
 
@@ -259,7 +259,7 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                             Text(v.group, style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                             progress[v.url]?.takeIf { it.inProgress }?.let {
-                                Text("Watched to ${PlayerActivity.formatTime(it.position)}",
+                                Text(tr("Watched to ${PlayerActivity.formatTime(it.position)}"),
                                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -393,7 +393,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
         }
         if (show.languages.size > 1) item {
             Column(Modifier.padding(start = pad, end = pad, top = 16.dp)) {
-                Text("Audio / version", style = MaterialTheme.typography.titleSmall,
+                Text(tr("Audio / version"), style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(show.languages) { l ->
@@ -413,9 +413,9 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Season $season", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                    Text(tr("Season $season"), Modifier.weight(1f), fontWeight = FontWeight.Bold)
                     Text(
-                        "${episodes.size} episodes", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tr("${episodes.size} episodes"), color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.width(10.dp))
@@ -435,7 +435,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Season $s", Modifier.weight(1f), fontWeight = if (s == season) FontWeight.Bold else FontWeight.Normal)
+                    Text(tr("Season $s"), Modifier.weight(1f), fontWeight = if (s == season) FontWeight.Bold else FontWeight.Normal)
                     Text(
                         "${show.episodesOf(s).size}", color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
@@ -458,7 +458,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                 Text(ep.label, fontWeight = FontWeight.Bold, modifier = Modifier.width(90.dp))
                 Column(Modifier.weight(1f)) {
                     Text(ep.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val note = if (version.language != language) "Only in ${version.versionLabel}"
+                    val note = if (version.language != language) tr("Only in ${version.versionLabel}")
                     else version.versionLabel
                     Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (p != null && p.fraction > 0.01f) {
@@ -496,7 +496,7 @@ private fun Credits(details: MetaDetails?, directorLabel: String) {
 @Composable
 private fun CreditLine(label: String, names: String) {
     Row {
-        Text("$label  ", color = Color(0xFFBDBDBD), style = MaterialTheme.typography.bodyMedium.copy(shadow = TitleShadow))
+        Text("${tr(label)}  ", color = Color(0xFFBDBDBD), style = MaterialTheme.typography.bodyMedium.copy(shadow = TitleShadow))
         Text(
             names, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium.copy(shadow = TitleShadow),
@@ -551,7 +551,7 @@ fun CollectionScreen(key: String, nav: Nav, wide: Boolean) {
 @Composable
 fun TmdbAttribution(pad: androidx.compose.ui.unit.Dp) {
     Text(
-        "Metadata and images from TMDB. Ratings via OMDb. This product uses the TMDB API but is not endorsed or certified by TMDB.",
+        tr("Metadata and images from TMDB. Ratings via OMDb. This product uses the TMDB API but is not endorsed or certified by TMDB."),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = pad, vertical = 24.dp),
