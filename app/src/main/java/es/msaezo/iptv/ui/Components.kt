@@ -168,7 +168,7 @@ fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onCli
         title = movie.title,
         subtitle = movie.year?.toString(),
         image = meta?.posterUrl ?: movie.poster,
-        vote = meta?.vote ?: 0.0,
+        vote = meta?.vote ?: movie.rating ?: 0.0,
         langs = movie.languages,
         progress = progress,
         width = width,
@@ -180,9 +180,10 @@ fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onCli
 fun ShowCard(show: Show, meta: TmdbItem?, width: Dp?, onClick: () -> Unit) {
     PosterCard(
         title = show.name,
-        subtitle = "${show.seasons.size} season${if (show.seasons.size == 1) "" else "s"} · ${show.episodes.size} ep",
+        subtitle = if (show.episodes.isEmpty()) (show.year?.toString() ?: "Series")
+        else "${show.seasons.size} season${if (show.seasons.size == 1) "" else "s"} · ${show.episodes.size} ep",
         image = meta?.posterUrl ?: show.poster,
-        vote = meta?.vote ?: 0.0,
+        vote = meta?.vote ?: show.rating ?: 0.0,
         langs = show.languages,
         progress = null,
         width = width,

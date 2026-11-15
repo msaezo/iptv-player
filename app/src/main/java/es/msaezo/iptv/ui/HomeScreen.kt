@@ -53,14 +53,16 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val tmdbKey by app.store.tmdbKey.collectAsState()
     val progress by app.store.progress.collectAsState()
     val favorites by app.store.favorites.collectAsState()
+    val episodeShow by app.store.episodeShow.collectAsState()
 
-    val resume = remember(progress, view) {
+    val resume = remember(progress, view, episodeShow) {
         val seen = HashSet<String>()
         progress.entries.filter { it.value.inProgress }
             .sortedByDescending { it.value.updatedAt }
             .mapNotNull { (url, p) ->
                 view.movieFor(url)?.let { m -> if (seen.add(m.id)) Resume.M(m, p.fraction) else null }
-                    ?: view.showFor(url)?.let { s -> if (seen.add(s.id)) Resume.S(s, p.fraction) else null }
+                    ?: (view.showFor(url) ?: episodeShow[url]?.let { view.showById(it) })
+                        ?.let { s -> if (seen.add(s.id)) Resume.S(s, p.fraction) else null }
             }.take(20)
     }
     val favMovies = remember(favorites, view) {
@@ -106,7 +108,7 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                     }
                     is Resume.S -> PosterCard(
                         r.show.name, "Continue", known[r.show.id]?.posterUrl ?: r.show.poster,
-                        known[r.show.id]?.vote ?: 0.0, r.show.languages, r.progress, cardWidth,
+                        known[r.show.id]?.vote ?: r.show.rating ?: 0.0, r.show.languages, r.progress, cardWidth,
                     ) { nav.open(Route.ShowDetail(r.show.id)) }
                 }
             }

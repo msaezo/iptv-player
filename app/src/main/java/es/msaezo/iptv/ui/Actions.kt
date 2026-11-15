@@ -113,6 +113,7 @@ object Actions {
             val start = if (i == 0 && !fromStart) progress[v.url]?.takeIf { it.inProgress }?.position ?: 0L else 0L
             v.toItem(show.name, "${show.name} · ${ep.label}${if (ep.title.isNotBlank()) " · " + ep.title else ""}", start)
         }
+        store.rememberEpisodes(show.id, show.episodes.flatMap { ep -> ep.versions.map { it.url } })
         Playback.play(context, items, 0, live = false)
     }
 

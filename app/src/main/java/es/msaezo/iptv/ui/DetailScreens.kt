@@ -59,6 +59,7 @@ import coil.compose.AsyncImage
 import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.data.LibraryView
 import es.msaezo.iptv.data.MetaDetails
+import es.msaezo.iptv.data.Show
 import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.player.PlayerActivity
 import kotlinx.coroutines.delay
@@ -236,15 +237,45 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ShowDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
     val app = IptvApp.instance
-    val context = LocalContext.current
-    val show = remember(id, view) { view.showById(id) }
-    if (show == null) {
+    val base = remember(id, view) { view.showById(id) }
+    if (base == null) {
         CenterMessage("This series is no longer in your filtered playlist"); return
     }
+    if (!base.needsLoading) {
+        ShowDetailContent(base, nav, wide); return
+    }
+    var loaded by remember(id, view) { mutableStateOf<Show?>(null) }
+    var error by remember(id, view) { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    LaunchedEffect(id, view, attempt) {
+        error = null
+        try {
+            loaded = app.playlists.loadEpisodes(base)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "Couldn't load episodes"
+        }
+    }
+    val show = loaded
+    when {
+        show != null -> ShowDetailContent(show, nav, wide)
+        error != null -> CenterMessage("${base.name}\n$error") {
+            ActionButton("Retry", Icons.Filled.Replay, true) { attempt++ }
+        }
+        else -> CenterMessage("Loading ${base.name}…", loading = true)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
+    val app = IptvApp.instance
+    val context = LocalContext.current
+    val id = show.id
     val known by app.meta.known.collectAsState()
     val favorites by app.store.favorites.collectAsState()
     val progress by app.store.progress.collectAsState()

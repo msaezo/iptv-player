@@ -245,6 +245,12 @@ object Classifier {
         }
     }
 
+    /** Episode title from a raw name: text after the SxxEyy marker, or the whole name. */
+    fun episodeTitle(name: String): String {
+        for (p in episodePatterns) if (p.containsMatchIn(name)) return episodeTail(name)
+        return Tags.displayTitle(cleanTitle(name))
+    }
+
     /** Text after the SxxEyy marker, e.g. "Pilot" in "Show S01E01 - Pilot". */
     private fun episodeTail(name: String): String {
         for (p in episodePatterns) {

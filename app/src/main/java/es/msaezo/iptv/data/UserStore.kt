@@ -44,6 +44,18 @@ class UserStore(context: Context) {
     private val _recentLive = MutableStateFlow(loadList("recentLive"))
     val recentLive: StateFlow<List<String>> = _recentLive.asStateFlow()
 
+    private val _episodeShow = MutableStateFlow(loadMap("episodeShow"))
+    /** Episode URL → show id, so "Continue watching" can find lazily-loaded series. */
+    val episodeShow: StateFlow<Map<String, String>> = _episodeShow.asStateFlow()
+
+    fun rememberEpisodes(showId: String, urls: List<String>) {
+        val m = LinkedHashMap(_episodeShow.value)
+        for (u in urls) { m.remove(u); m[u] = showId }
+        while (m.size > 4000) m.remove(m.keys.first())
+        _episodeShow.value = m
+        prefs.edit().putString("episodeShow", JSONObject(m as Map<*, *>).toString()).apply()
+    }
+
     private val _showLanguage = MutableStateFlow(loadMap("showLanguage"))
     val showLanguage: StateFlow<Map<String, String>> = _showLanguage.asStateFlow()
 

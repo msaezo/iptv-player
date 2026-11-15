@@ -20,7 +20,11 @@ data class LibraryFilter(
  * - movie versions merged into [Movie] titles,
  * - episodes merged into [Show]s with [Episode]s holding every version.
  */
-class Library(entries: List<Entry>, val epgUrl: String? = null) {
+class Library(
+    entries: List<Entry>,
+    val epgUrl: String? = null,
+    seriesSources: List<SeriesSource> = emptyList(),
+) {
 
     val live: List<Entry> = entries.filter { it.type == ContentType.LIVE }
     val movies: List<Movie>
@@ -33,14 +37,15 @@ class Library(entries: List<Entry>, val epgUrl: String? = null) {
     /** How many movie/series streams exist per language (for the Settings checklist). */
     val languageCounts: Map<String, Int>
 
-    val totalCount = entries.size
+    val totalCount = entries.size + seriesSources.size
 
     init {
         val movieEntries = entries.filter { it.type == ContentType.MOVIE }
         val episodeEntries = entries.filter { it.type == ContentType.SERIES }
         movies = mergeMovies(movieEntries)
-        shows = mergeShows(episodeEntries)
-        languageCounts = (movieEntries + episodeEntries).groupingBy { it.language }.eachCount()
+        shows = mergeShows(episodeEntries) + mergeSeriesSources(seriesSources)
+        languageCounts = ((movieEntries + episodeEntries).map { it.language } + seriesSources.map { it.language })
+            .groupingBy { it }.eachCount()
             .entries.sortedByDescending { it.value }.associate { it.key to it.value }
     }
 
@@ -121,6 +126,22 @@ class Library(entries: List<Entry>, val epgUrl: String? = null) {
             }
         }
 
+        /** Xtream series: one lazy [Show] per title, merging language versions. */
+        fun mergeSeriesSources(sources: List<SeriesSource>): List<Show> {
+            val byKey = LinkedHashMap<String, MutableList<SeriesSource>>()
+            for (s in sources) byKey.getOrPut(Tags.mergeKey(s.title)) { ArrayList() }.add(s)
+            return byKey.map { (key, list) ->
+                val sorted = list.sortedBy { langRank(it.language) }
+                Show(
+                    id = "x:$key",
+                    name = sorted.first().title,
+                    poster = sorted.firstNotNullOfOrNull { it.cover },
+                    episodes = emptyList(),
+                    sources = sorted,
+                )
+            }
+        }
+
         /** Preferred order for picking a version: language preference, then quality. */
         val languagePreference = listOf("es", "multi", "en", "vose", "lat")
 
@@ -166,6 +187,14 @@ class LibraryView(val library: Library, val filter: LibraryFilter) {
     }
 
     val shows: List<Show> = library.shows.mapNotNull { s ->
+        if (s.sources.isNotEmpty()) {
+            val src = s.sources.filter { it.language in filter.languages }
+            return@mapNotNull when {
+                src.isEmpty() -> null
+                src.size == s.sources.size -> s
+                else -> s.copy(sources = src, poster = src.firstNotNullOfOrNull { it.cover } ?: s.poster)
+            }
+        }
         val eps = s.episodes.mapNotNull { ep ->
             val vs = ep.versions.filter { it.language in filter.languages }
             when {
@@ -180,7 +209,7 @@ class LibraryView(val library: Library, val filter: LibraryFilter) {
 
     val movieCategories: List<Category<Movie>> = categoriesOf(movies) { it.versions.map { v -> v.group } }
     val showCategories: List<Category<Show>> =
-        categoriesOf(shows) { s -> s.episodes.flatMap { ep -> ep.versions.map { it.group } } }
+        categoriesOf(shows) { s -> s.episodes.flatMap { ep -> ep.versions.map { it.group } } + s.sources.map { it.group } }
 
     private val movieByUrl = HashMap<String, Movie>().apply {
         for (m in movies) for (v in m.versions) put(v.url, m)

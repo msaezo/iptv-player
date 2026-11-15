@@ -163,7 +163,7 @@ class MetaRepository(
     // --- details ------------------------------------------------------------------------
 
     suspend fun movieDetails(movie: Movie): MetaDetails? = details(movie.id, "movie", movie.title, movie.year)
-    suspend fun showDetails(show: Show): MetaDetails? = details(show.id, "tv", show.name, null)
+    suspend fun showDetails(show: Show): MetaDetails? = details(show.id, "tv", show.name, show.year)
 
     private suspend fun details(id: String, type: String, title: String, year: Int?): MetaDetails? =
         withContext(Dispatchers.IO) {

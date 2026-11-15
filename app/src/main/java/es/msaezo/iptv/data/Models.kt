@@ -17,6 +17,7 @@ data class Entry(
     val episode: Int? = null,
     val language: String = Tags.UNKNOWN,
     val quality: String? = null,
+    val rating: Double? = null,
     val userAgent: String? = null,
     val referrer: String? = null,
 ) {
@@ -40,6 +41,7 @@ data class Movie(
 ) {
     val groups: Set<String> by lazy { versions.mapTo(LinkedHashSet()) { it.group } }
     val languages: List<String> by lazy { versions.map { it.language }.distinct() }
+    val rating: Double? by lazy { versions.mapNotNull { it.rating }.maxOrNull() }
 }
 
 /** One episode, possibly available in several versions. */
@@ -58,14 +60,20 @@ data class Show(
     val name: String,
     val poster: String?,
     val episodes: List<Episode>,
+    /** Xtream series behind this show; episodes are loaded on demand when non-empty. */
+    val sources: List<SeriesSource> = emptyList(),
 ) {
+    /** True while episodes still have to be fetched from the server. */
+    val needsLoading: Boolean get() = episodes.isEmpty() && sources.isNotEmpty()
     val seasons: List<Int> by lazy { episodes.map { it.season }.distinct().sorted() }
     val groups: Set<String> by lazy {
-        episodes.flatMapTo(LinkedHashSet()) { ep -> ep.versions.map { it.group } }
+        episodes.flatMapTo(LinkedHashSet()) { ep -> ep.versions.map { it.group } } + sources.map { it.group }
     }
     val languages: List<String> by lazy {
-        episodes.flatMap { ep -> ep.versions.map { it.language } }.distinct()
+        (episodes.flatMap { ep -> ep.versions.map { it.language } } + sources.map { it.language }).distinct()
     }
+    val rating: Double? by lazy { sources.mapNotNull { it.rating }.maxOrNull() }
+    val year: Int? by lazy { sources.firstNotNullOfOrNull { it.year } }
     fun episodesOf(season: Int): List<Episode> = episodes.filter { it.season == season }
 }
 
