@@ -64,6 +64,8 @@ class Nav(
     var liveCategory by mutableIntStateOf(0)
     var liveFilter by mutableIntStateOf(0)
     var searchQuery by mutableStateOf("")
+    /** A Live TV section and filter to open next ("Sports" to "Tennis"), set from other screens. */
+    var pendingLive: Pair<String, String>? = null
 
     fun openList(title: String, items: List<Any>) {
         lists[title] = items

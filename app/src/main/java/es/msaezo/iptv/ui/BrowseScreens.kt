@@ -293,6 +293,17 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             Category(s.name, all ?: s.filters.flatMap { it.items })
         }
     }
+    // Arriving from the sports agenda: open straight on that sport.
+    LaunchedEffect(sections) {
+        val wanted = nav.pendingLive ?: return@LaunchedEffect
+        nav.pendingLive = null
+        val si = sections.indexOfFirst { it.name == wanted.first }
+        if (si >= 0) {
+            nav.liveCategory = si
+            nav.liveFilter = sections[si].filters.indexOfFirst { it.name == wanted.second }.coerceAtLeast(0)
+            nav.liveList.scrollToItem(0)
+        }
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     CategoryLayout(menu, nav.liveCategory, {

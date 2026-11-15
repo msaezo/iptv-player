@@ -100,6 +100,13 @@ class UserStore(context: Context) {
         prefs.edit().putString("follow", JSONArray(v).toString()).apply()
     }
 
+    private val _competitions = MutableStateFlow(prefs.getStringSet("competitions", null)?.toSet() ?: SportsRepository.DEFAULT)
+    /** Competitions shown in the sports agenda (ids from [SportsRepository.ALL]). */
+    val competitions: StateFlow<Set<String>> = _competitions.asStateFlow()
+    fun setCompetitions(ids: Set<String>) {
+        _competitions.value = ids; prefs.edit().putStringSet("competitions", ids).apply()
+    }
+
     private val introMarks = HashMap(loadMap("introMarks"))
     /** Where a season's intro starts and ends, in ms, as taught by the user. */
     fun introMark(key: String): Pair<Long, Long>? = introMarks[key]?.let { v ->

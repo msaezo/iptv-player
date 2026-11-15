@@ -4,6 +4,7 @@ import android.app.Application
 import es.msaezo.iptv.data.EpgRepository
 import es.msaezo.iptv.data.MetaRepository
 import es.msaezo.iptv.data.NetInfo
+import es.msaezo.iptv.data.SportsRepository
 import es.msaezo.iptv.data.PlaylistRepository
 import es.msaezo.iptv.data.UserStore
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,8 @@ class IptvApp : Application() {
         private set
     lateinit var epg: EpgRepository
         private set
+    lateinit var sports: SportsRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -32,6 +35,7 @@ class IptvApp : Application() {
         meta = MetaRepository(this, store, playlists, scope)
         net = NetInfo(scope).also { it.refresh() }
         epg = EpgRepository(playlists, store, scope)
+        sports = SportsRepository(store, scope)
     }
 
     companion object {

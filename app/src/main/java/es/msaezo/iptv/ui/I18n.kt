@@ -217,6 +217,11 @@ object I18n {
         "Stop sharing" to "Dejar de compartir", "2 · On the new device" to "2 · En el dispositivo nuevo",
         "Address shown on the other device" to "Dirección que sale en el otro dispositivo", "Code" to "Código",
         "Copy to this device" to "Copiar a este dispositivo", "Copying…" to "Copiando…", "Done. Restarting…" to "Hecho. Reiniciando…",
+        // sports agenda
+        "Sports agenda" to "Agenda deportiva", "LIVE" to "EN DIRECTO", "Tomorrow" to "Mañana",
+        "World Cup" to "Mundial", "Euro" to "Eurocopa",
+        "Home shows the next two days of these competitions. Selecting a fixture opens that sport's channels. The fixtures come from ESPN's public feed, which is free but unofficial, so it can stop working without notice."
+            to "En Inicio salen los próximos dos días de estas competiciones. Al elegir un partido se abren los canales de ese deporte. Los partidos vienen del feed público de ESPN, que es gratis pero no oficial, así que puede dejar de funcionar sin aviso.",
         // player
         "Can't play this stream" to "No se puede reproducir", "Open in other player" to "Abrir en otro reproductor",
         "Close" to "Cerrar", "Intro saved for this season" to "Intro guardada para esta temporada",
