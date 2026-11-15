@@ -25,7 +25,8 @@ class ParserTest {
         http://h:8080/series/u/p/3003.mkv
     """.trimIndent()
 
-    private val lib = Library(M3uParser.parse(sample.reader().buffered()).entries)
+    private val parsed = M3uParser.parse(sample.reader().buffered())
+    private val lib = Library(parsed.entries, parsed.epgUrl)
     private val view = lib.view(LibraryFilter())
 
     @Test fun classifies() {
