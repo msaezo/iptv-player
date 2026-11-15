@@ -2,6 +2,7 @@ package es.msaezo.iptv
 
 import android.app.Application
 import es.msaezo.iptv.data.MetaRepository
+import es.msaezo.iptv.data.NetInfo
 import es.msaezo.iptv.data.PlaylistRepository
 import es.msaezo.iptv.data.UserStore
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,8 @@ class IptvApp : Application() {
         private set
     lateinit var meta: MetaRepository
         private set
+    lateinit var net: NetInfo
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -23,6 +26,7 @@ class IptvApp : Application() {
         store = UserStore(this)
         playlists = PlaylistRepository(this, store, scope)
         meta = MetaRepository(this, store, playlists, scope)
+        net = NetInfo(scope).also { it.refresh() }
     }
 
     companion object {

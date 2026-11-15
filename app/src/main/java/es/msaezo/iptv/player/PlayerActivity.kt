@@ -21,6 +21,8 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import androidx.media3.datasource.HttpDataSource
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -152,6 +154,18 @@ class PlayerActivity : ComponentActivity() {
         }
         // Left / right on the progress bar also move one minute (the default was 1/20 of the film).
         playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.setKeyTimeIncrement(JUMP_MS)
+
+        // Keep the progress line and the buttons away from the edges: 15% free on each side.
+        runCatching {
+            val side = (maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.15f).toInt()
+            for (id in intArrayOf(androidx.media3.ui.R.id.exo_bottom_bar, androidx.media3.ui.R.id.exo_progress)) {
+                val v = playerView.findViewById<View>(id) ?: continue
+                val lp = v.layoutParams as? ViewGroup.MarginLayoutParams ?: continue
+                lp.leftMargin += side
+                lp.rightMargin += side
+                v.layoutParams = lp
+            }
+        }
 
         // Subtitles: our own text view, so they can sit on a soft rounded plate, centred.
         val screenShort = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
@@ -301,17 +315,30 @@ class PlayerActivity : ComponentActivity() {
             player.prepare()
             return
         }
-        if (live && liveRetries < 3) {
+        // Network hiccups and provider refusals (odd HTTP codes such as 458) are often gone a
+        // moment later, typically once the provider has noticed the previous stream closed.
+        val network = error.errorCode in 2000..2999
+        if ((live || network) && liveRetries < 3) {
             liveRetries++
-            showOverlay("Reconnecting… ($liveRetries/3)")
+            showOverlay(if (live) "Reconnecting… ($liveRetries/3)" else "Trying again… ($liveRetries/3)")
             handler.postDelayed({ player.prepare(); player.playWhenReady = true }, 2000L * liveRetries)
             return
+        }
+        val http = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+        val message = when {
+            http != null && http in 450..499 && http != 451 ->
+                "Your provider refused this stream (HTTP $http).\n\nThis is usually its connection limit: another " +
+                    "device or a stream that only just closed still counts. Wait a few seconds and retry. " +
+                    "A VPN that changed server can cause it too."
+            http == 404 -> "The provider no longer has this file (HTTP 404)."
+            http != null -> "The provider answered HTTP $http."
+            else -> "${error.errorCodeName}\n${error.cause?.message ?: error.message ?: ""}".trim()
         }
         errorDialog?.dismiss()
         errorDialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle("Can't play this stream")
-            .setMessage("${error.errorCodeName}\n${error.cause?.message ?: error.message ?: ""}".trim())
-            .setPositiveButton("Retry") { _, _ -> player.prepare(); player.playWhenReady = true }
+            .setMessage(message)
+            .setPositiveButton("Retry") { _, _ -> liveRetries = 0; player.prepare(); player.playWhenReady = true }
             .setNeutralButton("Open in other player") { _, _ -> openExternal() }
             .setNegativeButton("Close") { _, _ -> finish() }
             .show()
@@ -327,7 +354,31 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    private var centerHandled = false
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // OK / centre: pause, and again to resume, without going through the on-screen controls.
+        val isCenter = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER ||
+            event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (isCenter) {
+            if (event.action == KeyEvent.ACTION_DOWN && !playerView.isControllerFullyVisible) {
+                if (event.repeatCount == 0) {
+                    centerHandled = true
+                    if (player.isPlaying || player.playWhenReady && player.playbackState == Player.STATE_BUFFERING) {
+                        player.pause()
+                        playerView.showController()
+                    } else {
+                        player.play()
+                        playerView.hideController()
+                    }
+                }
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_UP && centerHandled) {
+                centerHandled = false
+                return true
+            }
+        }
         if (event.action == KeyEvent.ACTION_DOWN && !playerView.isControllerFullyVisible) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> if (live) {

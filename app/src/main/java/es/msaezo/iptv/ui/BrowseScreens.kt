@@ -271,8 +271,8 @@ fun ChannelRow(number: Int, ch: Entry, favorite: Boolean, onFavorite: () -> Unit
         Row(
             Modifier
                 .weight(1f)
-                .tvClickable(RoundedCornerShape(10.dp), 1.02f, onClick)
-                .background(Color(0xFF181818), RoundedCornerShape(10.dp))
+                .tvClickable(Square, 1.02f, onClick)
+                .background(Color(0xFF181818), Square)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -281,7 +281,7 @@ fun ChannelRow(number: Int, ch: Entry, favorite: Boolean, onFavorite: () -> Unit
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Box(
-                Modifier.size(width = 64.dp, height = 40.dp).clip(RoundedCornerShape(6.dp))
+                Modifier.size(width = 64.dp, height = 40.dp).clip(Square)
                     .background(Color(0x22FFFFFF)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -297,7 +297,7 @@ fun ChannelRow(number: Int, ch: Entry, favorite: Boolean, onFavorite: () -> Unit
         }
         Spacer(Modifier.width(6.dp))
         Box(
-            Modifier.tvClickable(RoundedCornerShape(50), 1.1f, onFavorite).padding(10.dp),
+            Modifier.tvClickable(Square, 1.1f, onFavorite).padding(10.dp),
         ) {
             Icon(
                 if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,

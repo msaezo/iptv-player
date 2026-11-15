@@ -60,12 +60,12 @@ import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.data.TmdbItem
 
 /**
- * Clickable that is comfortable on a TV remote: grows slightly and shows a bright
- * border while focused.
+ * Clickable that is comfortable on a TV remote: grows slightly and shows a white
+ * frame while focused.
  */
 @Composable
 fun Modifier.tvClickable(
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = Square,
     scaleOnFocus: Float = 1.05f,
     onClick: () -> Unit,
 ): Modifier {
@@ -73,19 +73,12 @@ fun Modifier.tvClickable(
     val scale by animateFloatAsState(if (focused) scaleOnFocus else 1f, label = "focusScale")
     return this
         .graphicsLayer { scaleX = scale; scaleY = scale }
-        .border(if (focused) 3.dp else 0.dp, if (focused) Color.White else Color.Transparent, shape)
+        // A white frame with a small gap, so focus reads on light and dark artwork alike.
+        .border(2.dp, if (focused) Color.White else Color.Transparent, shape)
+        .padding(4.dp)
         .clip(shape)
         .onFocusChanged { focused = it.isFocused }
         .clickable(onClick = onClick)
-}
-
-/** Clear focus ring for standard buttons, so the remote's position is always visible. */
-@Composable
-fun Modifier.focusRing(shape: Shape = RoundedCornerShape(50)): Modifier {
-    var focused by remember { mutableStateOf(false) }
-    return this
-        .onFocusChanged { focused = it.isFocused }
-        .border(3.dp, if (focused) Brand else Color.Transparent, shape)
 }
 
 @Composable
@@ -93,7 +86,7 @@ fun RatingBadge(vote: Double, modifier: Modifier = Modifier) {
     if (vote <= 0.0) return
     Row(
         modifier
-            .background(Color(0xCC000000), RoundedCornerShape(6.dp))
+            .background(Color(0xCC000000), Square)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -112,8 +105,8 @@ fun LanguagePills(langs: List<String>, modifier: Modifier = Modifier) {
                 Tags.shortLabel(it),
                 color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier
-                    .background(Color(0xD9000000), RoundedCornerShape(4.dp))
-                    .border(1.dp, Color(0x59FFFFFF), RoundedCornerShape(4.dp))
+                    .background(Color(0xD9000000), Square)
+                    .border(1.dp, Color(0x59FFFFFF), Square)
                     .padding(horizontal = 5.dp, vertical = 1.dp),
             )
         }
@@ -211,7 +204,7 @@ fun CollectionTile(title: String, count: Int, image: String?, modifier: Modifier
     Box(
         modifier
             .aspectRatio(16f / 9f)
-            .tvClickable(RoundedCornerShape(16.dp), 1.06f, onClick)
+            .tvClickable(Square, 1.06f, onClick)
             .background(Brush.linearGradient(listOf(Color(0xFF2B5876), Color(0xFF4E4376))))
     ) {
         if (image != null) {
@@ -271,9 +264,9 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
         color = if (selected) Color.Black else Color.White,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         modifier = Modifier
-            .tvClickable(RoundedCornerShape(50), 1.06f, onClick)
-            .background(if (selected) Color.White else Color(0x26FFFFFF), RoundedCornerShape(50))
-            .border(1.dp, if (selected) Color.White else Color(0x55FFFFFF), RoundedCornerShape(50))
+            .tvClickable(Square, 1.06f, onClick)
+            .background(if (selected) Color.White else Color(0x26FFFFFF), Square)
+            .border(1.dp, if (selected) Color.White else Color(0x55FFFFFF), Square)
             .padding(horizontal = 16.dp, vertical = 7.dp),
     )
 }
@@ -292,7 +285,7 @@ fun LandscapeCard(
         Modifier
             .width(width)
             .aspectRatio(16f / 9f)
-            .tvClickable(RoundedCornerShape(8.dp), 1.08f, onClick)
+            .tvClickable(Square, 1.08f, onClick)
             .background(Color(0xFF222222))
     ) {
         if (image != null) {
@@ -327,9 +320,9 @@ fun SeeAllCard(width: Dp, ratio: Float, onClick: () -> Unit) {
         Modifier
             .width(width)
             .aspectRatio(ratio)
-            .tvClickable(RoundedCornerShape(8.dp), 1.08f, onClick)
+            .tvClickable(Square, 1.08f, onClick)
             .background(Color(0xFF1C1C1C))
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)),
+            .border(1.dp, Color(0x33FFFFFF), Square),
         contentAlignment = Alignment.Center,
     ) {
         Text("See all ›", color = Color.White, fontWeight = FontWeight.Bold)
@@ -366,10 +359,10 @@ fun <T> CategoryLayout(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp)
-                            .tvClickable(RoundedCornerShape(10.dp), 1.02f) { onSelect(i) }
+                            .tvClickable(Square, 1.02f) { onSelect(i) }
                             .background(
                                 if (isSel) Color(0x2EFFFFFF) else Color.Transparent,
-                                RoundedCornerShape(10.dp),
+                                Square,
                             )
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,

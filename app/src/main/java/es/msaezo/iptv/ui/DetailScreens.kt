@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,20 +59,37 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.data.LibraryView
+import es.msaezo.iptv.data.Entry
 import es.msaezo.iptv.data.MetaDetails
+import es.msaezo.iptv.data.Movie
 import es.msaezo.iptv.data.Show
 import es.msaezo.iptv.data.Tags
 import es.msaezo.iptv.player.PlayerActivity
 import kotlinx.coroutines.delay
 
+/**
+ * Artwork behind a title's page, an optional muted preview over it, and a dark veil
+ * so white text stays readable however bright the picture is.
+ */
 @Composable
-private fun Backdrop(url: String?) {
-    if (url == null) return
+private fun Backdrop(url: String?, preview: Entry?) {
+    val previewOn by IptvApp.instance.store.preview.collectAsState()
+    if (url == null && (preview == null || !previewOn)) return
     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-        AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (url != null) {
+            AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        if (preview != null && previewOn) {
+            PreviewVideo(preview.url, preview.userAgent, preview.referrer, Modifier.fillMaxSize())
+        }
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0x33000000), Bg))
+                Brush.horizontalGradient(0f to Color(0xD9000000), 0.55f to Color(0x80000000), 1f to Color(0x26000000))
+            )
+        )
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(0f to Color(0x59000000), 0.5f to Color(0x80000000), 1f to Bg)
             )
         )
     }
@@ -87,10 +105,10 @@ fun ActionButton(
 ) {
     Row(
         modifier
-            .tvClickable(RoundedCornerShape(6.dp), 1.06f, onClick)
+            .tvClickable(Square, 1.06f, onClick)
             .background(
                 if (primary) Color.White else Color(0x66808080),
-                RoundedCornerShape(6.dp),
+                Square,
             )
             .padding(horizontal = 22.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -117,7 +135,7 @@ fun RatingsRow(details: MetaDetails?, fallbackVote: Double?) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for ((label, value, color) in chips) {
             Row(
-                Modifier.background(Color(0x33000000), RoundedCornerShape(8.dp))
+                Modifier.background(Color(0xB3000000), Square)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -155,6 +173,8 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(id) { delay(250); runCatching { playFocus.requestFocus() } }
 
+    val previewOn by app.store.preview.collectAsState()
+    val similar by produceState(emptyList<Movie>(), id) { value = app.meta.similarMovies(movie) }
     val resume = remember(progress, movie) { Actions.resumeVersion(movie) }
     val meta = details?.item ?: known[movie.id]
     val fav = "m:${movie.id}" in favorites
@@ -163,25 +183,27 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Box {
-                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl)
+                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl, movie.versions.firstOrNull())
                 Row(
-                    Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null) (if (wide) 120.dp else 80.dp) else 16.dp),
+                    Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null || previewOn) (if (wide) 120.dp else 80.dp) else 16.dp),
                 ) {
                     val poster = meta?.posterUrl ?: movie.poster
                     if (poster != null) {
                         AsyncImage(
                             poster, movie.title, contentScale = ContentScale.Crop,
                             modifier = Modifier.width(if (wide) 220.dp else 110.dp).aspectRatio(2f / 3f)
-                                .clip(RoundedCornerShape(12.dp)),
+                                .clip(Square),
                         )
                         Spacer(Modifier.width(if (wide) 32.dp else 16.dp))
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            movie.title, fontWeight = FontWeight.Bold,
-                            style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall,
+                            movie.title, fontWeight = FontWeight.Bold, color = Color.White,
+                            style = (if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall)
+                                .copy(shadow = TitleShadow),
                         )
-                        Text(metaLine(movie.year, details), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(metaLine(movie.year, details), color = Color(0xFFE6E6E6),
+                            style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow))
                         RatingsRow(details, meta?.vote)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             ActionButton(
@@ -200,8 +222,9 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                         }
                         val overview = details?.item?.overview?.takeIf { it.isNotBlank() } ?: meta?.overview
                         if (!overview.isNullOrBlank()) {
-                            Text(overview, style = MaterialTheme.typography.bodyLarge, maxLines = if (wide) 6 else 10,
-                                overflow = TextOverflow.Ellipsis)
+                            Text(overview, color = Color.White,
+                                style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow),
+                                maxLines = if (wide) 6 else 10, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -214,8 +237,8 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                     for (v in movie.versions) {
                         Column(
                             Modifier
-                                .tvClickable(RoundedCornerShape(12.dp), 1.04f) { Actions.playMovie(context, movie, v) }
-                                .background(Color(0xFF1C1C1C), RoundedCornerShape(10.dp))
+                                .tvClickable(Square, 1.04f) { Actions.playMovie(context, movie, v) }
+                                .background(Color(0xFF1C1C1C), Square)
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
                             Text(
@@ -231,6 +254,11 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                         }
                     }
                 }
+            }
+        }
+        if (similar.isNotEmpty()) item {
+            PosterRow("More like this", similar, pad) { m ->
+                MovieCard(m, known[m.id], null, if (wide) 140.dp else 106.dp) { nav.open(Route.MovieDetail(m.id)) }
             }
         }
         item { TmdbAttribution(pad) }
@@ -287,6 +315,11 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
 
     val language = remember(showLangs, show) { Actions.preferredLanguage(show) }
     val next = remember(progress, show, language) { Actions.nextEpisode(show, language) }
+    val previewOn by app.store.preview.collectAsState()
+    val firstEpisode = remember(show, language) {
+        show.episodes.firstOrNull()?.let { es.msaezo.iptv.data.Library.bestVersion(it.versions, language) }
+    }
+    val similar by produceState(emptyList<Show>(), id) { value = app.meta.similarShows(show) }
     var season by remember(id) { mutableStateOf(next?.first?.season ?: show.seasons.first()) }
     val episodes = remember(show, season) { show.episodesOf(season) }
     val meta = details?.item ?: known[show.id]
@@ -296,24 +329,25 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Box {
-                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl)
-                Row(Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null) (if (wide) 120.dp else 80.dp) else 16.dp)) {
+                Backdrop(if (wide) meta?.backdropLargeUrl else meta?.backdropUrl, firstEpisode)
+                Row(Modifier.padding(start = pad, end = pad, top = if (meta?.backdrop != null || (previewOn && firstEpisode != null)) (if (wide) 120.dp else 80.dp) else 16.dp)) {
                     val poster = meta?.posterUrl ?: show.poster
                     if (poster != null) {
                         AsyncImage(
                             poster, show.name, contentScale = ContentScale.Crop,
                             modifier = Modifier.width(if (wide) 200.dp else 100.dp).aspectRatio(2f / 3f)
-                                .clip(RoundedCornerShape(12.dp)),
+                                .clip(Square),
                         )
                         Spacer(Modifier.width(if (wide) 32.dp else 16.dp))
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            show.name, fontWeight = FontWeight.Bold,
-                            style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall,
+                            show.name, fontWeight = FontWeight.Bold, color = Color.White,
+                            style = (if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall)
+                                .copy(shadow = TitleShadow),
                         )
-                        Text(metaLine(null, details, "${show.episodes.size} episodes"),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(metaLine(null, details, "${show.episodes.size} episodes"), color = Color(0xFFE6E6E6),
+                            style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow))
                         RatingsRow(details, meta?.vote)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             val target = next?.first ?: show.episodes.first()
@@ -332,8 +366,9 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                         }
                         val overview = details?.item?.overview?.takeIf { it.isNotBlank() } ?: meta?.overview
                         if (!overview.isNullOrBlank()) {
-                            Text(overview, style = MaterialTheme.typography.bodyLarge, maxLines = if (wide) 5 else 8,
-                                overflow = TextOverflow.Ellipsis)
+                            Text(overview, color = Color.White,
+                                style = MaterialTheme.typography.bodyLarge.copy(shadow = TitleShadow),
+                                maxLines = if (wide) 5 else 8, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -365,8 +400,8 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                 Modifier
                     .padding(horizontal = pad, vertical = 4.dp)
                     .fillMaxWidth()
-                    .tvClickable(RoundedCornerShape(12.dp), 1.015f) { Actions.playEpisode(context, show, ep, language) }
-                    .background(Color(0xFF181818), RoundedCornerShape(10.dp))
+                    .tvClickable(Square, 1.015f) { Actions.playEpisode(context, show, ep, language) }
+                    .background(Color(0xFF181818), Square)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -387,6 +422,11 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                     }
                 }
                 if (p?.finished == true) Text("✓", color = Color.White, fontSize = 18.sp)
+            }
+        }
+        if (similar.isNotEmpty()) item {
+            PosterRow("More like this", similar, pad) { x ->
+                ShowCard(x, known[x.id], if (wide) 140.dp else 106.dp) { nav.open(Route.ShowDetail(x.id)) }
             }
         }
         item { TmdbAttribution(pad) }

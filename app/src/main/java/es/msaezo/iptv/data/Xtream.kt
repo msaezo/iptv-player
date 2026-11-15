@@ -12,6 +12,9 @@ import java.net.URI
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /** A series as listed by the Xtream API; episodes are fetched when the show is opened. */
 data class SeriesSource(
@@ -80,7 +83,8 @@ class XtreamData(val entries: List<Entry>, val series: List<SeriesSource>, val e
 class XtreamClient(private val cacheDir: File, private val userAgent: () -> String) {
 
     /**
-     * Downloads the catalogue lists and turns them into entries. Items that are unchanged
+     * Fetches the catalogue and turns it into entries. The three big lists (channels,
+     * movies, series) are read straight off the network, in parallel, and items unchanged
      * since the [previous] catalogue reuse the work already done for them.
      */
     fun load(
@@ -89,89 +93,126 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
         previousSeries: Map<String, SeriesSource>?,
         progress: (String) -> Unit,
     ): XtreamData {
-        cacheDir.mkdirs()
         progress("Signing in…")
         checkLogin(acc)
-        for ((i, action) in ACTIONS.withIndex()) {
-            progress("Updating catalogue: ${LABELS[i]}…")
-            Http.download(acc.api(action), File(cacheDir, "xt_$action.json"), userAgent()) { mb ->
-                progress("Updating catalogue: ${LABELS[i]}… $mb MB")
+        progress("Updating catalogue…")
+        val live = AtomicInteger(); val movies = AtomicInteger(); val shows = AtomicInteger()
+        val tick: () -> Unit = {
+            progress("Updating catalogue…  %,d channels · %,d movies · %,d series".format(live.get(), movies.get(), shows.get()))
+        }
+        fun categories(action: String): Map<String, String> {
+            val map = HashMap<String, String>()
+            Http.read(acc.api(action), userAgent()) { reader ->
+                readArray(reader, CATEGORY_KEYS) { o ->
+                    val id = o["category_id"] ?: return@readArray
+                    map[id] = o["category_name"]?.trim().orEmpty().ifEmpty { id }
+                }
             }
+            return map
         }
 
-        progress("Reading channels…")
-        val liveCats = readCategories(File(cacheDir, "xt_get_live_categories.json"))
-        val vodCats = readCategories(File(cacheDir, "xt_get_vod_categories.json"))
-        val seriesCats = readCategories(File(cacheDir, "xt_get_series_categories.json"))
+        val liveJob = {
+            val cats = categories("get_live_categories")
+            val out = ArrayList<Entry>(8192)
+            Http.read(acc.api("get_live_streams"), userAgent()) { reader ->
+                readArray(reader, LIVE_KEYS) { o ->
+                    val id = o["stream_id"] ?: return@readArray
+                    val name = o["name"]?.trim().orEmpty().ifEmpty { "Channel $id" }
+                    val group = cats[o["category_id"]] ?: "Uncategorized"
+                    val liveUrl = acc.liveUrl(id)
+                    val logo = o["stream_icon"]?.takeIf { it.startsWith("http") }
+                    val old = previous?.get(liveUrl)
+                    out += if (old != null && old.rawName == name && old.group == group && old.logo == logo) old
+                    else Entry(
+                        title = name, rawName = name, url = liveUrl, logo = logo,
+                        group = group, tvgId = o["epg_channel_id"]?.takeIf { it.isNotBlank() },
+                        type = ContentType.LIVE,
+                        language = Tags.languageOfGroup(group) ?: Tags.UNKNOWN,
+                        quality = Tags.quality(name, group),
+                    )
+                    if (live.incrementAndGet() % 2000 == 0) tick()
+                }
+            }
+            out
+        }
+        val movieJob = {
+            val cats = categories("get_vod_categories")
+            val out = ArrayList<Entry>(32_768)
+            Http.read(acc.api("get_vod_streams"), userAgent()) { reader ->
+                readArray(reader, VOD_KEYS) { o ->
+                    val id = o["stream_id"] ?: return@readArray
+                    val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
+                    val group = cats[o["category_id"]] ?: "Movies"
+                    val base = Classifier.movie(
+                        rawName = name, url = acc.movieUrl(id, o["container_extension"]),
+                        logo = o["stream_icon"]?.takeIf { it.startsWith("http") }, group = group,
+                        previous = previous,
+                    )
+                    val year = base.year ?: o["year"]?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2100 }
+                    val rating = parseRating(o["rating"])
+                    val added = o["added"]?.toLongOrNull() ?: 0L
+                    out += if (base.year == year && base.rating == rating && base.added == added) base
+                    else base.copy(year = year, rating = rating, added = added)
+                    if (movies.incrementAndGet() % 2000 == 0) tick()
+                }
+            }
+            out
+        }
+        val seriesJob = {
+            val cats = categories("get_series_categories")
+            val out = ArrayList<SeriesSource>(8192)
+            Http.read(acc.api("get_series"), userAgent()) { reader ->
+                readArray(reader, SERIES_KEYS) { o ->
+                    val id = o["series_id"] ?: return@readArray
+                    val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
+                    val group = cats[o["category_id"]] ?: "Series"
+                    val modified = o["last_modified"]?.toLongOrNull() ?: 0L
+                    val old = previousSeries?.get(id)
+                    if (old != null && old.rawName == name && old.group == group && old.added == modified) {
+                        out += old
+                    } else {
+                        val (t, y) = Classifier.splitYear(name)
+                        out += SeriesSource(
+                            seriesId = id, rawName = name, title = Tags.displayTitle(t), group = group,
+                            cover = o["cover"]?.takeIf { it.startsWith("http") },
+                            rating = parseRating(o["rating"]),
+                            language = Tags.language(name, group),
+                            year = y ?: (o["releaseDate"] ?: o["release_date"])?.take(4)?.toIntOrNull(),
+                            added = modified,
+                        )
+                    }
+                    if (shows.incrementAndGet() % 2000 == 0) tick()
+                }
+            }
+            out
+        }
 
-        val entries = ArrayList<Entry>(32_768)
-        readArray(File(cacheDir, "xt_get_live_streams.json")) { o ->
-            val id = o["stream_id"] ?: return@readArray
-            val name = o["name"]?.trim().orEmpty().ifEmpty { "Channel $id" }
-            val group = liveCats[o["category_id"]] ?: "Uncategorized"
-            val liveUrl = acc.liveUrl(id)
-            val logo = o["stream_icon"]?.takeIf { it.startsWith("http") }
-            val old = previous?.get(liveUrl)
-            if (old != null && old.rawName == name && old.group == group && old.logo == logo) {
-                entries += old
-                return@readArray
-            }
-            entries += Entry(
-                title = name, rawName = name, url = liveUrl,
-                logo = logo,
-                group = group, tvgId = o["epg_channel_id"]?.takeIf { it.isNotBlank() },
-                type = ContentType.LIVE,
-                language = Tags.languageOfGroup(group) ?: Tags.UNKNOWN,
-                quality = Tags.quality(name, group),
-            )
+        val liveList: List<Entry>
+        val movieList: List<Entry>
+        val seriesList: List<SeriesSource>
+        val pool = Executors.newFixedThreadPool(3) { r ->
+            Thread(r, "catalogue-net").apply { priority = Thread.MIN_PRIORITY + 1; isDaemon = true }
         }
-        progress("Reading movies…")
-        readArray(File(cacheDir, "xt_get_vod_streams.json")) { o ->
-            val id = o["stream_id"] ?: return@readArray
-            val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
-            val group = vodCats[o["category_id"]] ?: "Movies"
-            val movieUrl = acc.movieUrl(id, o["container_extension"])
-            val base = Classifier.classify(
-                rawName = name, url = movieUrl,
-                logo = o["stream_icon"]?.takeIf { it.startsWith("http") }, group = group,
-                tvgId = null, duration = null, userAgent = null, referrer = null,
-                previous = previous,
-            )
-            val year = base.year ?: o["year"]?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2100 }
-            val rating = parseRating(o["rating"])
-            val added = o["added"]?.toLongOrNull() ?: 0L
-            entries += if (base.year == year && base.rating == rating && base.added == added) base
-            else base.copy(year = year, rating = rating, added = added)
+        try {
+            val f1 = pool.submit(Callable { runCatching(liveJob) })
+            val f2 = pool.submit(Callable { runCatching(movieJob) })
+            val f3 = pool.submit(Callable { runCatching(seriesJob) })
+            // Some panels refuse simultaneous requests: anything that failed is tried again alone.
+            liveList = f1.get().getOrElse { live.set(0); liveJob() }
+            movieList = f2.get().getOrElse { movies.set(0); movieJob() }
+            seriesList = f3.get().getOrElse { shows.set(0); seriesJob() }
+        } finally {
+            pool.shutdownNow()
         }
-        progress("Reading series…")
-        val series = ArrayList<SeriesSource>(8192)
-        readArray(File(cacheDir, "xt_get_series.json")) { o ->
-            val id = o["series_id"] ?: return@readArray
-            val name = o["name"]?.trim().orEmpty().ifEmpty { return@readArray }
-            val group = seriesCats[o["category_id"]] ?: "Series"
-            val modified = o["last_modified"]?.toLongOrNull() ?: 0L
-            val oldSeries = previousSeries?.get(id)
-            if (oldSeries != null && oldSeries.rawName == name && oldSeries.group == group && oldSeries.added == modified) {
-                series += oldSeries
-                return@readArray
-            }
-            val (t, y) = Classifier.splitYear(name)
-            series += SeriesSource(
-                seriesId = id, rawName = name, title = Tags.displayTitle(t), group = group,
-                cover = o["cover"]?.takeIf { it.startsWith("http") },
-                rating = parseRating(o["rating"]),
-                language = Tags.language(name, group),
-                year = y ?: (o["releaseDate"] ?: o["release_date"])?.take(4)?.toIntOrNull(),
-                added = modified,
-            )
-        }
-        // The raw lists are no longer needed: the organised catalogue is saved separately.
-        for (action in ACTIONS) File(cacheDir, "xt_$action.json").delete()
-        return XtreamData(entries, series, acc.epgUrl)
+        tick()
+        val entries = ArrayList<Entry>(liveList.size + movieList.size)
+        entries.addAll(liveList); entries.addAll(movieList)
+        return XtreamData(entries, seriesList, acc.epgUrl)
     }
 
     /** Episodes of one series (all seasons), as playable entries. */
     fun loadEpisodes(acc: XtreamAccount, src: SeriesSource, showName: String): List<Entry> {
+        cacheDir.mkdirs()
         val file = File(cacheDir, "xt_series_${src.seriesId}.json")
         if (!file.exists() || System.currentTimeMillis() - file.lastModified() > 6 * 3_600_000L) {
             Http.download(acc.api("get_series_info", "&series_id=${src.seriesId}"), file, userAgent()) {}
@@ -224,34 +265,21 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
     }
 
     companion object {
-        private val ACTIONS = listOf(
-            "get_live_categories", "get_vod_categories", "get_series_categories",
-            "get_live_streams", "get_vod_streams", "get_series",
-        )
-        private val LABELS = listOf(
-            "live categories", "movie categories", "series categories",
-            "channel list", "movie list", "series list",
-        )
+        private val CATEGORY_KEYS = setOf("category_id", "category_name")
+        private val LIVE_KEYS = setOf("stream_id", "name", "category_id", "stream_icon", "epg_channel_id")
+        private val VOD_KEYS = setOf("stream_id", "name", "category_id", "stream_icon", "container_extension",
+            "year", "rating", "added")
+        private val SERIES_KEYS = setOf("series_id", "name", "category_id", "cover", "rating", "last_modified",
+            "releaseDate", "release_date")
 
         fun parseRating(s: String?): Double? =
             s?.replace(',', '.')?.toDoubleOrNull()?.takeIf { it > 0 && it <= 10 }
 
-        private fun readCategories(file: File): Map<String, String> {
-            val map = HashMap<String, String>()
-            readArray(file) { o ->
-                val id = o["category_id"] ?: return@readArray
-                map[id] = o["category_name"]?.trim().orEmpty().ifEmpty { id }
-            }
-            return map
-        }
-
-        /** Streams a top-level JSON array of flat objects; nested values are skipped. */
-        fun readArray(file: File, onItem: (Map<String, String>) -> Unit) {
-            if (!file.exists()) return
-            file.bufferedReader(Charsets.UTF_8).use { readArray(it, onItem) }
-        }
-
-        fun readArray(reader: Reader, onItem: (Map<String, String>) -> Unit) {
+        /**
+         * Streams a top-level JSON array of flat objects. Only [keys] are kept (null = all);
+         * everything else, long synopses included, is skipped without being built.
+         */
+        fun readArray(reader: Reader, keys: Set<String>? = null, onItem: (Map<String, String>) -> Unit) {
             val r = JsonReader(reader)
             r.isLenient = true
             if (r.peek() != JsonToken.BEGIN_ARRAY) {
@@ -259,7 +287,7 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
                 r.skipValue(); return
             }
             r.beginArray()
-            val map = HashMap<String, String>(32)
+            val map = HashMap<String, String>(16)
             while (r.hasNext()) {
                 if (r.peek() != JsonToken.BEGIN_OBJECT) {
                     r.skipValue(); continue
@@ -268,6 +296,9 @@ class XtreamClient(private val cacheDir: File, private val userAgent: () -> Stri
                 r.beginObject()
                 while (r.hasNext()) {
                     val key = r.nextName()
+                    if (keys != null && key !in keys) {
+                        r.skipValue(); continue
+                    }
                     when (r.peek()) {
                         JsonToken.STRING, JsonToken.NUMBER -> map[key] = r.nextString()
                         JsonToken.BOOLEAN -> map[key] = r.nextBoolean().toString()
@@ -315,6 +346,16 @@ object Http {
             }
         }
         throw IOException("Too many redirects")
+    }
+
+    /** Opens [url] and hands its body to [block] as a buffered UTF-8 reader. */
+    fun <T> read(url: String, ua: String, block: (Reader) -> T): T {
+        val conn = open(url, ua)
+        try {
+            return java.io.BufferedReader(java.io.InputStreamReader(conn.inputStream, Charsets.UTF_8), 1 shl 16).use(block)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     fun getText(url: String, ua: String): String {

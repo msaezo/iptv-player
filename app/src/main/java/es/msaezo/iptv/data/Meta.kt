@@ -206,6 +206,77 @@ class MetaRepository(
             }
         }
 
+    // --- recommendations ----------------------------------------------------------------
+
+    @Volatile private var matcherCache: Pair<LibraryView, Matcher>? = null
+    private fun matcherFor(view: LibraryView): Matcher {
+        matcherCache?.let { if (it.first === view) return it.second }
+        return Matcher(view).also { matcherCache = view to it }
+    }
+
+    /** Titles from the catalogue that TMDB recommends after [movie]; same-pack titles as a fallback. */
+    suspend fun similarMovies(movie: Movie): List<Movie> = withContext(Dispatchers.IO) {
+        val view = repo.view.value ?: return@withContext emptyList()
+        val out = LinkedHashMap<String, Movie>()
+        recommended("movie", movie.id, movie.title, movie.year) { item ->
+            matcherFor(view).movie(item)?.takeIf { it.id != movie.id }?.let { m ->
+                if (out.putIfAbsent(m.id, m) == null) m.id else null
+            }
+        }
+        if (out.size < 6) {
+            val group = movie.versions.first().group
+            view.movieCategories.firstOrNull { it.name == group }?.items.orEmpty()
+                .filter { it.id != movie.id && it.poster != null }.take(18)
+                .forEach { out.putIfAbsent(it.id, it) }
+        }
+        out.values.take(24)
+    }
+
+    suspend fun similarShows(show: Show): List<Show> = withContext(Dispatchers.IO) {
+        val view = repo.view.value ?: return@withContext emptyList()
+        val out = LinkedHashMap<String, Show>()
+        recommended("tv", show.id, show.name, show.year) { item ->
+            matcherFor(view).show(item)?.takeIf { it.id != show.id }?.let { s ->
+                if (out.putIfAbsent(s.id, s) == null) s.id else null
+            }
+        }
+        if (out.size < 6) {
+            val group = show.groups.firstOrNull()
+            view.showCategories.firstOrNull { it.name == group }?.items.orEmpty()
+                .filter { it.id != show.id && it.poster != null }.take(18)
+                .forEach { out.putIfAbsent(it.id, it) }
+        }
+        out.values.take(24)
+    }
+
+    /** Walks TMDB's recommendations for a title; [accept] returns the catalogue id it matched, if any. */
+    private fun recommended(type: String, id: String, title: String, year: Int?, accept: (TmdbItem) -> String?) {
+        val key = store.tmdbKey.value
+        if (key.isBlank()) return
+        try {
+            val item = _known.value[id] ?: searchTmdb(type, title, year, key) ?: return
+            val found = HashMap<String, TmdbItem>()
+            for (path in listOf("recommendations", "similar")) {
+                for (page in 1..2) {
+                    val json = tmdb("/$type/${item.id}/$path", mapOf("language" to LANG, "page" to "$page"), key, 24 * 7)
+                        ?: break
+                    val results = json.optJSONArray("results") ?: break
+                    for (i in 0 until results.length()) {
+                        val rec = parseItem(results.getJSONObject(i), type) ?: continue
+                        accept(rec)?.let { found[it] = rec }
+                    }
+                    if (page >= json.optInt("total_pages", 1)) break
+                }
+                if (found.size >= 14) break
+            }
+            if (found.isNotEmpty()) _known.value = _known.value + found
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _lastError.value = e.message
+        }
+    }
+
     private fun omdb(imdbId: String): Ratings? {
         val key = store.omdbKey.value
         if (key.isBlank()) return null

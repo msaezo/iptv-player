@@ -179,6 +179,20 @@ object Classifier {
         return if (last.contains('.')) last.substringAfterLast('.').lowercase() else ""
     }
 
+    /** Fast path for items already known to be movies (the provider's own movie list). */
+    fun movie(rawName: String, url: String, logo: String?, group: String, previous: Map<String, Entry>?): Entry {
+        previous?.get(url)?.let { old ->
+            if (old.rawName == rawName && old.group == group && old.logo == logo) return old
+        }
+        val (title, year) = splitYear(rawName)
+        val shown = Tags.displayTitle(title).let { if (it == rawName) rawName else it }
+        return Entry(
+            title = shown, rawName = rawName, url = url, logo = logo, group = group, tvgId = null,
+            type = ContentType.MOVIE, year = year, language = Tags.language(rawName, group),
+            quality = Tags.quality(rawName, group), key = Tags.keyOfDisplay(shown),
+        )
+    }
+
     fun classify(
         rawName: String,
         url: String,
@@ -230,7 +244,7 @@ object Classifier {
                 Entry(
                     title = shown, rawName = rawName, url = url, logo = logo,
                     group = group, tvgId = tvgId, type = type, year = year, language = language,
-                    quality = quality, key = Tags.mergeKey(shown), userAgent = userAgent, referrer = referrer,
+                    quality = quality, key = Tags.keyOfDisplay(shown), userAgent = userAgent, referrer = referrer,
                 )
             }
             ContentType.SERIES -> {
@@ -245,7 +259,7 @@ object Classifier {
                     title = epTitle, rawName = rawName, url = url, logo = logo, group = group,
                     tvgId = tvgId, type = type, showName = show, season = ep?.season ?: 1,
                     episode = ep?.episode, language = language, quality = quality,
-                    key = Tags.mergeKey(show), userAgent = userAgent, referrer = referrer,
+                    key = Tags.keyOfDisplay(show), userAgent = userAgent, referrer = referrer,
                 )
             }
         }

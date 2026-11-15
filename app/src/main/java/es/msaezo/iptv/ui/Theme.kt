@@ -3,7 +3,14 @@ package es.msaezo.iptv.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -19,6 +26,9 @@ val Brand = Color(0xFFE8384F)
 val Bg = Color(0xFF0A0A0A)
 /** Secondary text: light grey that stays readable on the black background (about 9:1). */
 val Muted = Color(0xFFB8B8B8)
+/** Corners are square throughout (a hair of rounding so edges don't look jagged on TV). */
+val Square = RoundedCornerShape(1.dp)
+val TitleShadow = Shadow(color = Color(0xE6000000), offset = Offset(0f, 2f), blurRadius = 12f)
 val Tomato = Color(0xFFFA320A)
 val Gold = Color(0xFFF5C518)
 
@@ -67,7 +77,11 @@ private val type = Typography().let { t ->
 
 @Composable
 fun IptvTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = type) {
-        Box(Modifier.fillMaxSize().background(Bg)) { content() }
+    val shapes = Shapes(extraSmall = Square, small = Square, medium = Square, large = Square, extraLarge = Square)
+    MaterialTheme(colorScheme = scheme, typography = type, shapes = shapes) {
+        // Text is white unless a screen says otherwise: nothing should ever fall back to black.
+        CompositionLocalProvider(LocalContentColor provides Color.White) {
+            Box(Modifier.fillMaxSize().background(Bg)) { content() }
+        }
     }
 }

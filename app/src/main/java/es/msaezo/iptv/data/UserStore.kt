@@ -35,6 +35,14 @@ class UserStore(context: Context) {
     private val _userAgent = MutableStateFlow(prefs.getString("userAgent", DEFAULT_UA) ?: DEFAULT_UA)
     val userAgent: StateFlow<String> = _userAgent.asStateFlow()
 
+    private val _preview = MutableStateFlow(prefs.getBoolean("preview", true))
+    /** Play a short muted preview on a title's page. */
+    val preview: StateFlow<Boolean> = _preview.asStateFlow()
+
+    fun setPreview(on: Boolean) {
+        _preview.value = on; prefs.edit().putBoolean("preview", on).apply()
+    }
+
     private val _favorites = MutableStateFlow(prefs.getStringSet("favorites", emptySet())!!.toSet())
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
 

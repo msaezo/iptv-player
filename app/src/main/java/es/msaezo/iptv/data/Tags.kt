@@ -183,6 +183,7 @@ object Tags {
     private val prefixRegex = Regex("""^\s*\|?\s*([A-Za-z0-9+]{2,10})\s*(?:[|:]\s*|[-–]\s+)""")
     private val prefixPipeRegex = Regex("""^\s*\|([A-Za-z]{2,5})\|""")
     private val trailingTagRegex = Regex("""[\s\-_.]([A-Za-z]{2,10})\s*$""")
+    private val spaces = Regex("\\s+")
     private val tagSplit = Regex("[^\\p{L}0-9+]+")
 
     /** Language of one tag as written: words always count, short codes only in capitals. */
@@ -254,12 +255,15 @@ object Tags {
      * Key used to merge versions of the same title: lowercase, accents removed, provider
      * prefixes, language and quality tags and punctuation stripped.
      */
-    fun mergeKey(title: String): String =
-        tokens(displayTitle(title))
+    fun mergeKey(title: String): String = keyOfDisplay(displayTitle(title), title)
+
+    /** [mergeKey] for a title that already went through [displayTitle]. */
+    fun keyOfDisplay(shown: String, original: String = shown): String =
+        tokens(shown)
             .filter { it !in noiseTokens }
             .joinToString(" ")
             .lowercase()
-            .ifEmpty { fold(title).lowercase().trim() }
+            .ifEmpty { fold(original).lowercase().trim() }
 
     /** Display title with language / quality / service tags removed. */
     fun displayTitle(title: String): String {
@@ -275,7 +279,7 @@ object Tags {
             if (parts.isNotEmpty() && parts.all { isTag(it) }) "" else m.value
         }
         // drop trailing quality/language words
-        val words = s.trim().split(Regex("\\s+")).toMutableList()
+        val words = s.trim().split(spaces).toMutableList()
         while (words.size > 1) {
             val w = fold(words.last()).trim('-', '|', '.', ',', ':')
             if (w.isEmpty() || w in noiseTokens || (w in languageTokens && words.last().all { !it.isLowerCase() })) {

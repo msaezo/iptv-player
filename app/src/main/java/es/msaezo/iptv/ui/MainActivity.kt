@@ -8,6 +8,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.core.animateDpAsState
 import android.os.Bundle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.clickable
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -25,13 +29,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,6 +61,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { IptvTheme { MainScreen() } }
     }
+
+    override fun onStop() {
+        super.onStop()
+        Preview.stop()
+    }
 }
 
 @Composable
@@ -74,9 +81,14 @@ fun MainScreen() {
     BackHandler(enabled = nav.stack.isNotEmpty() || nav.tab != Tab.HOME) { nav.back() }
 
     if (wide) {
-        Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().padding(start = RAIL_WIDTH)) { Content(nav, wide, state) }
-            SideRail(nav, focusOnStart = isTv)
+        // On a TV everything is drawn a little smaller, so more titles fit on screen.
+        val base = LocalDensity.current
+        val density = if (isTv) Density(base.density * TV_SCALE, base.fontScale) else base
+        CompositionLocalProvider(LocalDensity provides density) {
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().padding(start = RAIL_WIDTH)) { Content(nav, wide, state) }
+                SideRail(nav, focusOnStart = isTv)
+            }
         }
     } else {
         Scaffold(
@@ -107,75 +119,66 @@ fun MainScreen() {
     }
 }
 
-private val RAIL_WIDTH = 84.dp
+private const val TV_SCALE = 0.82f
+private val RAIL_WIDTH = 60.dp
 
-/** TV side menu: icons only; expands with labels over the content while focused. */
+/** TV side menu: a slim column of icons, no labels. */
 @Composable
 private fun SideRail(nav: Nav, focusOnStart: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
-    val width by animateDpAsState(if (expanded) 250.dp else RAIL_WIDTH, label = "rail")
     val homeFocus = remember { FocusRequester() }
+    val location by IptvApp.instance.net.location.collectAsState()
     if (focusOnStart) {
-        // Give the menu focus first; the home hero then moves it to its Play button.
+        // Give the menu focus first; the home banner then moves it to its Play button.
         LaunchedEffect(Unit) {
             delay(300)
             runCatching { homeFocus.requestFocus() }
         }
     }
     Column(
-        Modifier
-            .fillMaxHeight()
-            .width(width)
-            .background(
-                if (expanded) Brush.horizontalGradient(listOf(Color(0xF5000000), Color(0xE6000000), Color(0x00000000)))
-                else Brush.horizontalGradient(listOf(Color(0xFF000000), Color(0xCC000000)))
-            )
-            .onFocusChanged { expanded = it.hasFocus }
-            .padding(vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxHeight().width(RAIL_WIDTH).background(Color(0xFF050505)).padding(vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(Modifier.padding(start = 22.dp, bottom = 28.dp).height(40.dp), contentAlignment = Alignment.CenterStart) {
-            if (expanded) {
-                Image(painterResource(R.drawable.logo_wordmark), "TUTV", Modifier.height(26.dp))
-            } else {
-                Image(painterResource(R.mipmap.ic_launcher), "TUTV", Modifier.size(40.dp))
-            }
-        }
-        val order = listOf(Tab.SEARCH, Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.LIVE)
-        for (t in order) RailItem(t, nav, expanded, if (t == Tab.HOME) homeFocus else null)
+        Image(painterResource(R.mipmap.ic_launcher), "TUTV", Modifier.size(30.dp))
         Spacer(Modifier.weight(1f))
-        RailItem(Tab.SETTINGS, nav, expanded, null)
+        for (t in listOf(Tab.SEARCH, Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.LIVE)) {
+            RailItem(t, nav, if (t == Tab.HOME) homeFocus else null)
+        }
+        Spacer(Modifier.weight(1f))
+        // Country the connection appears from (a quick check that the VPN is on).
+        location?.let {
+            Text(
+                it.countryCode, color = Color(0xFF9A9A9A), fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        RailItem(Tab.SETTINGS, nav, null)
     }
 }
 
 @Composable
-private fun RailItem(t: Tab, nav: Nav, expanded: Boolean, focus: FocusRequester?) {
+private fun RailItem(t: Tab, nav: Nav, focus: FocusRequester?) {
     val selected = nav.tab == t
-    Row(
+    var focused by remember { mutableStateOf(false) }
+    Box(
         Modifier
-            .padding(horizontal = 12.dp)
-            .fillMaxWidth()
             .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
-            .tvClickable(RoundedCornerShape(8.dp), 1.03f) { nav.select(t) }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .onFocusChanged { focused = it.isFocused }
+            .size(44.dp)
+            .background(if (focused) Color.White else Color.Transparent, Square)
+            .clickable { nav.select(t) },
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
-            t.icon, t.label, Modifier.size(26.dp),
-            tint = if (selected) Color.White else Color(0xFF9A9A9A),
+            t.icon, t.label, Modifier.size(22.dp),
+            tint = when {
+                focused -> Color.Black
+                selected -> Color.White
+                else -> Color(0xFF8A8A8A)
+            },
         )
-        if (expanded) {
-            Spacer(Modifier.width(18.dp))
-            Text(
-                t.label,
-                color = if (selected) Color.White else Color(0xFFBDBDBD),
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        if (selected) {
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.size(width = 4.dp, height = 22.dp).background(Brand, RoundedCornerShape(2.dp)))
+        if (selected && !focused) {
+            Box(Modifier.align(Alignment.CenterStart).size(width = 2.dp, height = 18.dp).background(Brand))
         }
     }
 }
@@ -189,13 +192,13 @@ private fun Content(nav: Nav, wide: Boolean, state: PlaylistRepository.State) {
     }
     when (state) {
         is PlaylistRepository.State.NoPlaylist -> CenterMessage("Add your M3U playlist to get started") {
-            Button(modifier = Modifier.focusRing(), onClick = { nav.select(Tab.SETTINGS) }) { Text("Open Settings") }
+            ActionButton("Open Settings", null, true) { nav.select(Tab.SETTINGS) }
         }
         is PlaylistRepository.State.Loading -> CenterMessage(state.message, loading = true)
         is PlaylistRepository.State.Error -> CenterMessage("Couldn't load the playlist:\n${state.message}") {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(modifier = Modifier.focusRing(), onClick = { app.playlists.load(forceDownload = true) }) { Text("Retry") }
-                OutlinedButton(modifier = Modifier.focusRing(), onClick = { nav.select(Tab.SETTINGS) }) { Text("Settings") }
+                ActionButton("Retry", null, true) { app.playlists.load(forceDownload = true) }
+                ActionButton("Settings", null, false) { nav.select(Tab.SETTINGS) }
             }
         }
         is PlaylistRepository.State.Ready -> {

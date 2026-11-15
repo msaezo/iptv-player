@@ -16,13 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +42,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color(0x1FFFFFFF), RoundedCornerShape(16.dp))
+            .background(Color(0xFF161616), Square)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -89,12 +88,39 @@ fun SettingsScreen(wide: Boolean) {
         }
     }
 
+    val location by app.net.location.collectAsState()
+    val checking by app.net.checking.collectAsState()
+    val netError by app.net.error.collectAsState()
+    val preview by store.preview.collectAsState()
+    LaunchedEffect(Unit) { app.net.refresh() }
+
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = if (wide) 48.dp else 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        item {
+            Column(Modifier.widthIn(max = 900.dp)) {
+                Section("Your connection") {
+                    val loc = location
+                    when {
+                        loc != null -> {
+                            Text(
+                                listOfNotNull(loc.country, loc.city).joinToString(" · "),
+                                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                            )
+                            Hint(listOfNotNull("IP ${loc.ip}", loc.isp).joinToString("  ·  "))
+                        }
+                        checking -> Hint("Checking where you appear to be…")
+                        else -> Hint("Couldn't check your location${netError?.let { ": $it" } ?: ""}")
+                    }
+                    Hint("This is where websites and your provider see you. With the VPN on it should show the VPN's country.")
+                    ActionButton(if (checking) "Checking…" else "Check again", null, false) { app.net.refresh() }
+                }
+            }
+        }
+
         item {
             Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Playlist (M3U)") {
@@ -105,11 +131,9 @@ fun SettingsScreen(wide: Boolean) {
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(modifier = Modifier.focusRing(), onClick = { if (url.isNotBlank()) app.playlists.setPlaylist(url) }) { Text("Save & load") }
-                        OutlinedButton(modifier = Modifier.focusRing(), onClick = { app.playlists.load(forceDownload = true) }, enabled = savedUrl.isNotBlank()) {
-                            Text("Refresh now")
-                        }
-                        OutlinedButton(modifier = Modifier.focusRing(), onClick = { picker.launch(arrayOf("*/*")) }) { Text("Open .m3u file") }
+                        ActionButton("Save & load", null, true) { if (url.isNotBlank()) app.playlists.setPlaylist(url) }
+                        ActionButton("Refresh now", null, false) { if (savedUrl.isNotBlank()) app.playlists.load(forceDownload = true) }
+                        ActionButton("Open .m3u file", null, false) { picker.launch(arrayOf("*/*")) }
                     }
                     val status = when (val s = state) {
                         is PlaylistRepository.State.NoPlaylist -> "No playlist yet."
@@ -151,7 +175,7 @@ fun SettingsScreen(wide: Boolean) {
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .tvClickable(RoundedCornerShape(10.dp), 1.01f) {
+                                .tvClickable(Square, 1.01f) {
                                     store.setLanguages(if (checked) languages - code else languages + code)
                                 }
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
@@ -179,7 +203,7 @@ fun SettingsScreen(wide: Boolean) {
                         value = omdb, onValueChange = { omdb = it }, label = { Text("OMDb API key") },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
-                    Button(modifier = Modifier.focusRing(), onClick = { store.setTmdbKey(tmdb); store.setOmdbKey(omdb) }) { Text("Save keys") }
+                    ActionButton("Save keys", null, true) { store.setTmdbKey(tmdb); store.setOmdbKey(omdb) }
                     if (metaError != null) Text("Last error: $metaError", color = MaterialTheme.colorScheme.error)
                 }
             }
@@ -188,14 +212,25 @@ fun SettingsScreen(wide: Boolean) {
         item {
             Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Playback") {
+                    Row(
+                        Modifier.fillMaxWidth().tvClickable(Square, 1.01f) { store.setPreview(!preview) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = preview, onCheckedChange = null)
+                        Column(Modifier.weight(1f)) {
+                            Text("Preview on a title's page")
+                            Hint("Plays the opening minutes without sound behind the title. Uses your stream connection while it runs.")
+                        }
+                    }
                     Hint("Some providers only accept certain players. Change the user agent if streams refuse to play.")
                     OutlinedTextField(
                         value = ua, onValueChange = { ua = it }, label = { Text("User agent") },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(modifier = Modifier.focusRing(), onClick = { store.setUserAgent(ua) }) { Text("Save") }
-                        OutlinedButton(modifier = Modifier.focusRing(), onClick = { store.clearHistory() }) { Text("Clear watch history") }
+                        ActionButton("Save", null, true) { store.setUserAgent(ua) }
+                        ActionButton("Clear watch history", null, false) { store.clearHistory() }
                     }
                 }
             }

@@ -99,6 +99,7 @@ object Actions {
         val resume = resumeVersion(movie)
         val v = version ?: resume?.first ?: movie.versions.first()
         val start = if (!fromStart && resume != null && resume.first.url == v.url) resume.second else 0L
+        Preview.stop()
         Playback.play(
             context,
             listOf(v.toItem(movie.title, "${movie.title} · ${v.versionLabel}", start)),
@@ -122,6 +123,7 @@ object Actions {
             v.toItem(show.name, "${show.name} · ${ep.label}${if (ep.title.isNotBlank()) " · " + ep.title else ""}", start)
         }
         store.rememberEpisodes(show.id, show.episodes.flatMap { ep -> ep.versions.map { it.url } })
+        Preview.stop()
         Playback.play(context, items, 0, live = false)
     }
 
@@ -142,6 +144,7 @@ object Actions {
     }
 
     fun playLive(context: Context, channels: List<Entry>, index: Int) {
+        Preview.stop()
         Playback.play(context, channels.map { it.toItem(it.title, it.group) }, index, live = true)
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -136,6 +137,30 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
         rows.ifEmpty { view.showCategories.filter { it.name != LibraryView.ALL }.take(4) }
     }
 
+    // "Because you watched…": recommendations for the two titles watched most recently.
+    val watched = remember(progress, view, episodeShow) {
+        val seen = HashSet<String>()
+        progress.entries.sortedByDescending { it.value.updatedAt }.mapNotNull { (url, _) ->
+            val m = view.movieFor(url)
+            val sh = if (m == null) view.showFor(url) ?: episodeShow[url]?.let { view.showById(it) } else null
+            when {
+                m != null && seen.add(m.id) -> m
+                sh != null && seen.add(sh.id) -> sh
+                else -> null
+            }
+        }.take(2)
+    }
+    val watchedKey = watched.joinToString("|") { if (it is Movie) it.id else (it as Show).id }
+    val because by produceState(emptyList<Pair<String, List<Any>>>(), watchedKey, view) {
+        value = watched.map { x ->
+            when (x) {
+                is Movie -> x.title to app.meta.similarMovies(x)
+                is Show -> x.name to app.meta.similarShows(x)
+                else -> "" to emptyList<Any>()
+            }
+        }.filter { it.second.size >= 4 }
+    }
+
     val pad = if (wide) 48.dp else 12.dp
     val landW = if (wide) 270.dp else 190.dp
     val portW = if (wide) 140.dp else 106.dp
@@ -167,12 +192,21 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             }
         }
 
+        items(because, key = { "because:" + it.first }) { (title, list) ->
+            PosterRow("Because you watched $title", list, pad) { x ->
+                when (x) {
+                    is Movie -> MovieCard(x, known[x.id], null, portW) { nav.open(Route.MovieDetail(x.id)) }
+                    is Show -> ShowCard(x, known[x.id], portW) { nav.open(Route.ShowDetail(x.id)) }
+                }
+            }
+        }
+
         if (tmdbKey.isBlank()) item {
             Column(
                 Modifier
                     .padding(horizontal = pad, vertical = 12.dp)
                     .fillMaxWidth()
-                    .background(Color(0xFF1A1A1A), RoundedCornerShape(10.dp))
+                    .background(Color(0xFF1A1A1A), Square)
                     .padding(18.dp)
             ) {
                 Text("Unlock collections & ratings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -268,7 +302,7 @@ private fun Hero(list: List<Featured>, known: Map<String, TmdbItem>, wide: Boole
     }
     val side = if (wide) 48.dp else 20.dp
 
-    Box(if (wide) Modifier.fillMaxWidth().height(500.dp) else Modifier.fillMaxWidth().aspectRatio(0.72f)) {
+    Box(if (wide) Modifier.fillMaxWidth().height(430.dp) else Modifier.fillMaxWidth().aspectRatio(0.72f)) {
         // Artwork and text fade from one title to the next; the buttons below stay put,
         // so the remote's focus is never lost.
         Crossfade(current, animationSpec = tween(900), label = "hero") { f ->
@@ -357,7 +391,7 @@ private fun Hero(list: List<Featured>, known: Map<String, TmdbItem>, wide: Boole
                     val on = i == index % list.size
                     Box(
                         Modifier.size(width = if (on) 18.dp else 6.dp, height = 3.dp)
-                            .background(if (on) Color.White else Color(0x66FFFFFF), RoundedCornerShape(2.dp))
+                            .background(if (on) Color.White else Color(0x66FFFFFF), Square)
                     )
                 }
             }
