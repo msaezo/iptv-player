@@ -95,6 +95,10 @@ fun MainScreen() {
 
     BackHandler(enabled = nav.stack.isNotEmpty() || nav.tab != Tab.HOME) { nav.back() }
 
+    var menuFor by remember { mutableStateOf<Any?>(null) }
+    menuFor?.let { TitleMenu(it) { menuFor = null } }
+
+    CompositionLocalProvider(LocalTitleMenu provides { menuFor = it }) {
     if (wide) {
         // On a TV everything is drawn a little smaller, so more titles fit on screen.
         val base = LocalDensity.current
@@ -133,6 +137,7 @@ fun MainScreen() {
         ) { pad ->
             Box(Modifier.padding(pad).fillMaxSize()) { Content(nav, wide, state) }
         }
+    }
     }
 }
 

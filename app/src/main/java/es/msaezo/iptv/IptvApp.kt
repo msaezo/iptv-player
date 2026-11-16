@@ -7,7 +7,6 @@ import coil.memory.MemoryCache
 import es.msaezo.iptv.data.EpgRepository
 import es.msaezo.iptv.data.MetaRepository
 import es.msaezo.iptv.data.NetInfo
-import es.msaezo.iptv.data.SportsRepository
 import es.msaezo.iptv.data.PlaylistRepository
 import es.msaezo.iptv.data.UserStore
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +24,6 @@ class IptvApp : Application() {
     lateinit var net: NetInfo
         private set
     lateinit var epg: EpgRepository
-        private set
-    lateinit var sports: SportsRepository
         private set
 
     override fun onCreate() {
@@ -73,7 +70,6 @@ class IptvApp : Application() {
         meta = MetaRepository(this, store, playlists, scope)
         net = NetInfo(scope).also { it.refresh() }
         epg = EpgRepository(playlists, store, scope)
-        sports = SportsRepository(store, scope)
     }
 
     private val sessionFile: java.io.File get() = java.io.File(filesDir, "session.txt")

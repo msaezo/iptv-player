@@ -315,17 +315,6 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             Category(s.name, all ?: s.filters.flatMap { it.items })
         }
     }
-    // Arriving from the sports agenda: open straight on that sport.
-    LaunchedEffect(sections) {
-        val wanted = nav.pendingLive ?: return@LaunchedEffect
-        nav.pendingLive = null
-        val si = sections.indexOfFirst { it.name == wanted.first }
-        if (si >= 0) {
-            nav.liveCategory = si
-            nav.liveFilter = sections[si].filters.indexOfFirst { it.name == wanted.second }.coerceAtLeast(0)
-            nav.liveList.scrollToItem(0)
-        }
-    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     CategoryLayout(menu, nav.liveCategory, {
@@ -499,7 +488,7 @@ fun ChannelRow(
             Modifier
                 .weight(1f)
                 .focusMemory("ch|${ch.id}")
-                .tvClickable(Square, 1.015f, onClick)
+                .tvClickable(Square, 1.015f, onClick = onClick)
                 .background(Color(0xFF161616), Square)
                 .padding(horizontal = 12.dp, vertical = if (timeline) 3.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -562,7 +551,7 @@ fun ChannelRow(
             }
         }
         Spacer(Modifier.width(6.dp))
-        Box(Modifier.tvClickable(Square, 1.1f, onFavorite).padding(if (timeline) 3.dp else 8.dp)) {
+        Box(Modifier.tvClickable(Square, 1.1f, onClick = onFavorite).padding(if (timeline) 3.dp else 8.dp)) {
             Icon(
                 if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
                 contentDescription = "Favorite", modifier = Modifier.size(20.dp),

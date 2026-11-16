@@ -8,6 +8,8 @@ import androidx.compose.ui.text.style.TextAlign
 import es.msaezo.iptv.R
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,6 +79,8 @@ class FocusMemory {
 }
 
 val LocalFocusMemory = staticCompositionLocalOf<FocusMemory?> { null }
+/** Opens the options (☰) of a film or series: remove from Continue watching, favourites, watch later. */
+val LocalTitleMenu = staticCompositionLocalOf<((Any) -> Unit)?> { null }
 val LocalScreenId = compositionLocalOf { "" }
 val LocalRowKey = compositionLocalOf { "" }
 
@@ -102,10 +106,12 @@ fun Modifier.focusMemory(key: String): Modifier {
  * Clickable that is comfortable on a TV remote: grows slightly and shows a white
  * frame while focused.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun Modifier.tvClickable(
     shape: Shape = Square,
     scaleOnFocus: Float = 1.05f,
+    onMenu: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
     var focused by remember { mutableStateOf(false) }
@@ -117,7 +123,14 @@ fun Modifier.tvClickable(
         .padding(4.dp)
         .clip(shape)
         .onFocusChanged { focused = it.isFocused }
-        .clickable(onClick = onClick)
+        // The remote's ☰ key (or a long press on a phone) opens the options of this item.
+        .onKeyEvent { e ->
+            if (onMenu != null && e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                if (e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) onMenu()
+                true
+            } else false
+        }
+        .combinedClickable(onClick = onClick, onLongClick = onMenu)
 }
 
 @Composable
@@ -162,6 +175,7 @@ fun PosterCard(
     langs: List<String>,
     progress: Float?,
     width: Dp?,
+    onMenu: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Column(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth()) {
@@ -170,7 +184,7 @@ fun PosterCard(
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .focusMemory("${LocalRowKey.current}|$title|$subtitle")
-                .tvClickable(onClick = onClick)
+                .tvClickable(onMenu = onMenu, onClick = onClick)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (image != null) {
@@ -212,6 +226,7 @@ fun PosterCard(
 @Composable
 fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onClick: () -> Unit) {
     val title = remember(meta, movie.id) { meta?.titleFor(movie.id.substringBeforeLast('|')) ?: movie.title }
+    val menu = LocalTitleMenu.current
     PosterCard(
         title = title,
         subtitle = movie.year?.toString(),
@@ -220,6 +235,7 @@ fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onCli
         langs = movie.languages,
         progress = progress,
         width = width,
+        onMenu = menu?.let { { it(movie) } },
         onClick = onClick,
     )
 }
@@ -227,6 +243,7 @@ fun MovieCard(movie: Movie, meta: TmdbItem?, progress: Float?, width: Dp?, onCli
 @Composable
 fun ShowCard(show: Show, meta: TmdbItem?, width: Dp?, onClick: () -> Unit) {
     val title = remember(meta, show.id) { meta?.titleFor(show.id.removePrefix("x:")) ?: show.name }
+    val menu = LocalTitleMenu.current
     PosterCard(
         title = title,
         subtitle = if (show.episodes.isEmpty()) (show.year?.toString() ?: "Series")
@@ -236,6 +253,7 @@ fun ShowCard(show: Show, meta: TmdbItem?, width: Dp?, onClick: () -> Unit) {
         langs = show.languages,
         progress = null,
         width = width,
+        onMenu = menu?.let { { it(show) } },
         onClick = onClick,
     )
 }
@@ -246,7 +264,7 @@ fun CollectionTile(title: String, count: Int, image: String?, modifier: Modifier
     Box(
         modifier
             .aspectRatio(16f / 9f)
-            .tvClickable(Square, 1.06f, onClick)
+            .tvClickable(Square, 1.06f, onClick = onClick)
             .background(Brush.linearGradient(listOf(Color(0xFF2B5876), Color(0xFF4E4376))))
     ) {
         if (image != null) {
@@ -302,7 +320,7 @@ fun Pill(text: String, selected: Boolean, icon: ImageVector? = null, onClick: ()
     val color = if (selected) Color.Black else Color.White
     Row(
         Modifier
-            .tvClickable(Square, 1.06f, onClick)
+            .tvClickable(Square, 1.06f, onClick = onClick)
             .background(if (selected) Color.White else Color(0x26FFFFFF), Square)
             .border(1.dp, if (selected) Color.White else Color(0x55FFFFFF), Square)
             .padding(horizontal = 14.dp, vertical = 7.dp),
@@ -327,6 +345,7 @@ fun LandscapeCard(
     vote: Double,
     progress: Float?,
     width: Dp,
+    onMenu: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Box(
@@ -334,7 +353,7 @@ fun LandscapeCard(
             .width(width)
             .aspectRatio(16f / 9f)
             .focusMemory("${LocalRowKey.current}|$title")
-            .tvClickable(Square, 1.08f, onClick)
+            .tvClickable(Square, 1.08f, onMenu, onClick)
             .background(Color(0xFF222222))
     ) {
         if (image != null) {
@@ -369,7 +388,7 @@ fun SeeAllCard(width: Dp, ratio: Float, onClick: () -> Unit) {
         Modifier
             .width(width)
             .aspectRatio(ratio)
-            .tvClickable(Square, 1.08f, onClick)
+            .tvClickable(Square, 1.08f, onClick = onClick)
             .background(Color(0xFF1C1C1C))
             .border(1.dp, Color(0x33FFFFFF), Square),
         contentAlignment = Alignment.Center,

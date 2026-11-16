@@ -54,7 +54,6 @@ import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.R
 import es.msaezo.iptv.data.Category
 import es.msaezo.iptv.data.LibraryView
-import es.msaezo.iptv.data.SportEvent
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import es.msaezo.iptv.data.LiveGuide
@@ -131,6 +130,12 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     }
     val favShows = remember(favorites, view) {
         favorites.filter { it.startsWith("s:") }.mapNotNull { view.showById(it.removePrefix("s:")) }
+    }
+    val watchLater by app.store.watchLater.collectAsState()
+    val later = remember(watchLater, view) {
+        watchLater.mapNotNull { k ->
+            if (k.startsWith("m:")) view.movieById(k.removePrefix("m:")) else view.showById(k.removePrefix("s:"))
+        }
     }
     val featured = remember(collections.size, view, known.isNotEmpty()) { pickFeatured(collections, known, view, seed) }
     // With TMDB collections on screen only "Recently added" is extra; without them the
@@ -211,15 +216,6 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             .take(40).forEach { app.epg.request(it) }
     }
 
-    // Sports agenda: fixtures of the chosen competitions, followed names first.
-    val sportEvents by app.sports.events.collectAsState()
-    val competitions by app.store.competitions.collectAsState()
-    LaunchedEffect(competitions) { app.sports.refreshIfStale() }
-    val agenda = remember(sportEvents, follow) {
-        val words = follow.map { Library.normalize(it) }.filter { it.length >= 3 }
-        sportEvents.sortedBy { e -> if (words.any { Library.normalize(e.title).contains(it) }) 0 else 1 }
-    }
-
     // Collections often overlap heavily (trending, popular, this year): show each title once.
     val collectionRows = remember(collections) {
         distinctRows(
@@ -229,6 +225,7 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
         )
     }
 
+    val menu = LocalTitleMenu.current
     val pad = if (wide) 48.dp else 12.dp
     val landW = if (wide) 270.dp else 190.dp
     val portW = if (wide) 140.dp else 106.dp
@@ -242,10 +239,12 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                     is Resume.M -> LandscapeCard(
                         r.movie.title, known[r.movie.id]?.backdropUrl ?: r.movie.poster,
                         known[r.movie.id]?.vote ?: r.movie.rating ?: 0.0, r.progress, landW,
+                        onMenu = menu?.let { { it(r.movie) } },
                     ) { Actions.playMovie(context, r.movie) }
                     is Resume.S -> LandscapeCard(
                         r.show.name, known[r.show.id]?.backdropUrl ?: r.show.poster,
                         known[r.show.id]?.vote ?: r.show.rating ?: 0.0, r.progress, landW,
+                        onMenu = menu?.let { { it(r.show) } },
                     ) { nav.open(Route.ShowDetail(r.show.id)) }
                 }
             }
@@ -261,11 +260,11 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                 OnNowCard(ch, nowNext[ch.id], note, landW) { Actions.playLive(context, list, list.indexOf(ch)) }
             }
         }
-        if (agenda.isNotEmpty()) item {
-            PosterRow("Sports agenda", agenda, pad) { e ->
-                SportEventCard(e, landW) {
-                    nav.pendingLive = LiveGuide.SPORTS to e.competition.sport
-                    nav.select(Tab.LIVE)
+        if (later.isNotEmpty()) item {
+            PosterRow("Watch later", later, pad) { x ->
+                when (x) {
+                    is Movie -> MovieCard(x, known[x.id], null, portW) { nav.open(Route.MovieDetail(x.id)) }
+                    is Show -> ShowCard(x, known[x.id], portW) { nav.open(Route.ShowDetail(x.id)) }
                 }
             }
         }
@@ -377,52 +376,6 @@ private fun followedInGuide(guide: LiveGuide, follow: List<String>, epg: Map<Str
     return out
 }
 
-private fun whenLabel(start: Long): String {
-    val now = java.util.Calendar.getInstance()
-    val then = java.util.Calendar.getInstance().apply { timeInMillis = start }
-    val days = then.get(java.util.Calendar.DAY_OF_YEAR) - now.get(java.util.Calendar.DAY_OF_YEAR)
-    return when {
-        days == 0 -> hhmm(start)
-        days == 1 -> "${tr("Tomorrow")} ${hhmm(start)}"
-        else -> java.text.SimpleDateFormat("EEE", java.util.Locale(I18n.lang)).format(java.util.Date(start)) + " " + hhmm(start)
-    }
-}
-
-/** A fixture from the sports agenda; selecting it opens that sport's channels. */
-@Composable
-private fun SportEventCard(e: SportEvent, width: Dp, onClick: () -> Unit) {
-    Column(
-        Modifier
-            .width(width)
-            .height(84.dp)
-            .focusMemory("sport|${e.competition.id}|${e.title}")
-            .tvClickable(Square, 1.05f, onClick)
-            .background(Color(0xFF181818))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            liveIcon(e.competition.sport)?.let {
-                androidx.compose.material3.Icon(it, null, Modifier.size(14.dp), tint = Color(0xFFB8B8B8))
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(
-                e.competition.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = Color(0xFFB8B8B8), style = MaterialTheme.typography.labelSmall,
-            )
-            if (e.live) {
-                Text(
-                    tr("LIVE") + (e.detail?.let { "  $it" } ?: ""), color = Brand, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            } else {
-                Text(whenLabel(e.start), color = Color.White, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        Text(e.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
 /** A channel with what it is showing right now and until when. */
 @Composable
 private fun OnNowCard(ch: LiveChannel, guide: NowNext?, note: String?, width: Dp, onClick: () -> Unit) {
@@ -432,7 +385,7 @@ private fun OnNowCard(ch: LiveChannel, guide: NowNext?, note: String?, width: Dp
             .width(width)
             .height(84.dp)
             .focusMemory("now|${ch.id}")
-            .tvClickable(Square, 1.05f, onClick)
+            .tvClickable(Square, 1.05f, onClick = onClick)
             .background(Color(0xFF181818))
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,

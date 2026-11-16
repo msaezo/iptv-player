@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Movie
@@ -111,7 +112,7 @@ fun ActionButton(
 ) {
     Row(
         modifier
-            .tvClickable(Square, 1.06f, onClick)
+            .tvClickable(Square, 1.06f, onClick = onClick)
             .background(
                 if (primary) Color.White else Color(0x66808080),
                 Square,
@@ -184,6 +185,7 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
     val resume = remember(progress, movie) { Actions.resumeVersion(movie) }
     val meta = details?.item ?: known[movie.id]
     val fav = "m:${movie.id}" in favorites
+    val later by app.store.watchLater.collectAsState()
     val pad = if (wide) 48.dp else 16.dp
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
@@ -226,6 +228,9 @@ fun MovieDetailScreen(id: String, view: LibraryView, nav: Nav, wide: Boolean) {
                                 if (fav) "In my list" else "My list",
                                 if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, false,
                             ) { app.store.toggleFavorite("m:${movie.id}") }
+                            ActionButton(if ("m:${movie.id}" in later) "In Watch later" else "Watch later", Icons.Filled.WatchLater, false) {
+                                app.store.toggleWatchLater("m:${movie.id}")
+                            }
                             details?.trailer?.let { key ->
                                 ActionButton("Trailer", Icons.Filled.Movie, false) { openTrailer(context, key) }
                             }
@@ -336,6 +341,7 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
     val episodes = remember(show, season) { show.episodesOf(season) }
     val meta = details?.item ?: known[show.id]
     val fav = "s:${show.id}" in favorites
+    val later by app.store.watchLater.collectAsState()
     val pad = if (wide) 48.dp else 16.dp
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
@@ -376,6 +382,9 @@ private fun ShowDetailContent(show: Show, nav: Nav, wide: Boolean) {
                                 if (fav) "In my list" else "My list",
                                 if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, false,
                             ) { app.store.toggleFavorite("s:${show.id}") }
+                            ActionButton(if ("s:${show.id}" in later) "In Watch later" else "Watch later", Icons.Filled.WatchLater, false) {
+                                app.store.toggleWatchLater("s:${show.id}")
+                            }
                             details?.trailer?.let { key ->
                                 ActionButton("Trailer", Icons.Filled.Movie, false) { openTrailer(context, key) }
                             }

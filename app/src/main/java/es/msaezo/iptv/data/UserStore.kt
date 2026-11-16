@@ -100,13 +100,6 @@ class UserStore(context: Context) {
         prefs.edit().putString("follow", JSONArray(v).toString()).apply()
     }
 
-    private val _competitions = MutableStateFlow(prefs.getStringSet("competitions", null)?.toSet() ?: SportsRepository.DEFAULT)
-    /** Competitions shown in the sports agenda (ids from [SportsRepository.ALL]). */
-    val competitions: StateFlow<Set<String>> = _competitions.asStateFlow()
-    fun setCompetitions(ids: Set<String>) {
-        _competitions.value = ids; prefs.edit().putStringSet("competitions", ids).apply()
-    }
-
     private val _channelLists = MutableStateFlow(loadChannelLists())
     /** The user's own channel lists: name → channel ids, in the order they were created. */
     val channelLists: StateFlow<Map<String, Set<String>>> = _channelLists.asStateFlow()
@@ -274,6 +267,27 @@ class UserStore(context: Context) {
         val json = JSONObject()
         for ((k, p) in m) json.put(k, JSONArray().put(p.position).put(p.duration).put(p.updatedAt))
         prefs.edit().putString("progress", json.toString()).apply()
+    }
+
+    /** Forgets how far these streams were watched, which takes the title out of Continue watching. */
+    fun clearProgress(urls: Collection<String>) {
+        val m = _progress.value.toMutableMap()
+        if (!m.keys.removeAll(urls.toSet())) return
+        _progress.value = m
+        val json = JSONObject()
+        for ((k, p) in m) json.put(k, JSONArray().put(p.position).put(p.duration).put(p.updatedAt))
+        prefs.edit().putString("progress", json.toString()).apply()
+    }
+
+    private val _watchLater = MutableStateFlow(loadList("watchLater"))
+    /** Titles set aside to watch later, newest first: "m:<movieId>" or "s:<showId>". */
+    val watchLater: StateFlow<List<String>> = _watchLater.asStateFlow()
+
+    fun toggleWatchLater(key: String) {
+        val l = _watchLater.value
+        val v = if (key in l) l - key else listOf(key) + l
+        _watchLater.value = v
+        prefs.edit().putString("watchLater", JSONArray(v).toString()).apply()
     }
 
     fun clearHistory() {

@@ -248,6 +248,9 @@ object I18n {
         "No fixtures found yet." to "Todavía no se han encontrado partidos.",
         "Checking fixtures…" to "Buscando partidos…",
         // channel options
+        "Watch later" to "Ver más tarde", "In Watch later" to "En Ver más tarde",
+        "Remove from Watch later" to "Quitar de Ver más tarde",
+        "Remove from Continue watching" to "Quitar de Seguir viendo",
         "Add to favourites" to "Añadir a favoritos", "Remove from favourites" to "Quitar de favoritos",
         "New list…" to "Lista nueva…", "Name of the list" to "Nombre de la lista", "Create" to "Crear",
         "Cancel" to "Cancelar", "Added to favourites" to "Añadido a favoritos", "Removed from favourites" to "Quitado de favoritos",
