@@ -89,6 +89,10 @@ fun MainScreen() {
     val wide = isTv || config.screenWidthDp >= 840
     val state by app.playlists.state.collectAsState()
 
+    LaunchedEffect(nav.tab, nav.stack.size) {
+        app.mark("screen ${nav.tab}" + (nav.stack.lastOrNull()?.let { " > " + it.toString().take(60) } ?: ""))
+    }
+
     BackHandler(enabled = nav.stack.isNotEmpty() || nav.tab != Tab.HOME) { nav.back() }
 
     if (wide) {
