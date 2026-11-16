@@ -280,7 +280,7 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             }
         }
 
-        items(because, key = { "because:" + it.first }) { (title, list) ->
+        items(because) { (title, list) ->
             PosterRow("Because you watched $title", list, pad) { x ->
                 when (x) {
                     is Movie -> MovieCard(x, known[x.id], null, portW) { nav.open(Route.MovieDetail(x.id)) }

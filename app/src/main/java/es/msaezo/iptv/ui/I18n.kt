@@ -251,6 +251,9 @@ object I18n {
         "Add to favourites" to "Añadir a favoritos", "Remove from favourites" to "Quitar de favoritos",
         "New list…" to "Lista nueva…", "Name of the list" to "Nombre de la lista", "Create" to "Crear",
         "Cancel" to "Cancelar", "Added to favourites" to "Añadido a favoritos", "Removed from favourites" to "Quitado de favoritos",
+        "Last crash" to "Último cierre inesperado", "Clear" to "Borrar",
+        "If the app closed by itself, this is why. A photo of this box is what is needed to fix it."
+            to "Si la app se cerró sola, este es el motivo. Con una foto de este recuadro se puede arreglar.",
         // player
         "Can't play this stream" to "No se puede reproducir", "Open in other player" to "Abrir en otro reproductor",
         "Close" to "Cerrar", "Intro saved for this season" to "Intro guardada para esta temporada",

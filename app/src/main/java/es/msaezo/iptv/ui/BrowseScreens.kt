@@ -356,7 +356,7 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             LazyColumn(
                 state = nav.liveList,
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
                 itemsIndexed(filter.items, key = { _, ch -> ch.id }) { i, ch ->
@@ -437,7 +437,7 @@ private fun GuideHeader(windowStart: Long) {
 /** One channel's programmes as boxes on a time strip, with a line marking the present. */
 @Composable
 private fun ProgrammeLane(guide: NowNext?, quiet: Boolean, nowMs: Long, windowStart: Long, modifier: Modifier) {
-    BoxWithConstraints(modifier.height(38.dp).clipToBounds()) {
+    BoxWithConstraints(modifier.height(30.dp).clipToBounds()) {
         val w = maxWidth
         fun x(t: Long): Dp = w * ((t - windowStart).coerceIn(0L, WINDOW_MS).toFloat() / WINDOW_MS)
         val shown = guide?.items.orEmpty().filter { it.end > windowStart && it.start < windowStart + WINDOW_MS }
@@ -501,14 +501,14 @@ fun ChannelRow(
                 .focusMemory("ch|${ch.id}")
                 .tvClickable(Square, 1.015f, onClick)
                 .background(Color(0xFF161616), Square)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = if (timeline) 3.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(if (timeline) Modifier.weight(INFO_WEIGHT) else Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text("$number", modifier = Modifier.width(36.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall)
                 Box(
-                    Modifier.size(width = 56.dp, height = 36.dp).background(Color(0xFF262626)),
+                    Modifier.size(width = if (timeline) 46.dp else 56.dp, height = if (timeline) 28.dp else 36.dp).background(Color(0xFF262626)),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (ch.logo != null) {
@@ -516,31 +516,43 @@ fun ChannelRow(
                     }
                 }
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
+                val now = guide?.now
+                val next = guide?.next
+                val kinds = ch.labels.map { it.substringBefore(' ') }.distinct().filter { it != "Standard" && it != "Source" }
+                val qualities = when {
+                    kinds.size > 1 -> kinds.joinToString(" · ")
+                    ch.versions.size > 1 -> (kinds.firstOrNull()?.let { "$it · " } ?: "") + "${ch.versions.size} sources"
+                    else -> kinds.firstOrNull()
+                }
+                if (timeline) {
+                    // On the TV everything sits on one line, so more channels fit on screen.
                     Text(
-                        ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
-                        color = if (quiet) Color(0xFF8A8A8A) else Color.White,
+                        ch.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.Medium, color = if (quiet) Color(0xFF8A8A8A) else Color.White,
                     )
-                    val now = guide?.now
-                    val next = guide?.next
-                    val kinds = ch.labels.map { it.substringBefore(' ') }.distinct().filter { it != "Standard" && it != "Source" }
-                    val qualities = when {
-                        kinds.size > 1 -> kinds.joinToString(" · ")
-                        ch.versions.size > 1 -> (kinds.firstOrNull()?.let { "$it · " } ?: "") + "${ch.versions.size} sources"
-                        else -> kinds.firstOrNull()
+                    if (qualities != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(tr(qualities), maxLines = 1, style = MaterialTheme.typography.labelSmall, color = Color(0xFF8A8A8A))
                     }
-                    val line = if (timeline) qualities else when {
-                        now != null -> "Now  ${now.title}  ·  until ${hhmm(now.end)}" + (next?.let { "     Next  ${it.title}" } ?: "")
-                        next != null -> "${hhmm(next.start)}  ${next.title}"
-                        quiet -> "No event announced"
-                        else -> qualities
-                    }
-                    if (line != null) {
+                } else {
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            tr(line), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (!timeline && now != null) Color(0xFFD0D0D0) else Color(0xFF8A8A8A),
+                            ch.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
+                            color = if (quiet) Color(0xFF8A8A8A) else Color.White,
                         )
+                        val line = when {
+                            now != null -> "Now  ${now.title}  ·  until ${hhmm(now.end)}" + (next?.let { "     Next  ${it.title}" } ?: "")
+                            next != null -> "${hhmm(next.start)}  ${next.title}"
+                            quiet -> "No event announced"
+                            else -> qualities
+                        }
+                        if (line != null) {
+                            Text(
+                                tr(line), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (now != null) Color(0xFFD0D0D0) else Color(0xFF8A8A8A),
+                            )
+                        }
                     }
                 }
             }
@@ -550,7 +562,7 @@ fun ChannelRow(
             }
         }
         Spacer(Modifier.width(6.dp))
-        Box(Modifier.tvClickable(Square, 1.1f, onFavorite).padding(8.dp)) {
+        Box(Modifier.tvClickable(Square, 1.1f, onFavorite).padding(if (timeline) 3.dp else 8.dp)) {
             Icon(
                 if (favorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
                 contentDescription = "Favorite", modifier = Modifier.size(20.dp),

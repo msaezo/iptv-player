@@ -97,7 +97,9 @@ fun MainScreen() {
         val density = if (isTv) Density(base.density * TV_SCALE, base.fontScale) else base
         CompositionLocalProvider(LocalDensity provides density) {
             Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().padding(start = RAIL_WIDTH)) { Content(nav, wide, state) }
+                // Lists start a little below the top edge; the home banner and title pages go edge to edge.
+                val top = if (nav.stack.isEmpty() && nav.tab != Tab.HOME) 26.dp else 0.dp
+                Box(Modifier.fillMaxSize().padding(start = RAIL_WIDTH, top = top)) { Content(nav, wide, state) }
                 SideRail(nav, focusOnStart = isTv)
             }
         }

@@ -447,6 +447,24 @@ fun SettingsScreen(wide: Boolean) {
         }
 
         item {
+            val crash = remember { runCatching { app.crashFile.takeIf { it.exists() }?.readText() }.getOrNull() }
+            var cleared by remember { mutableStateOf(false) }
+            if (crash != null && !cleared) {
+                Column(Modifier.widthIn(max = 900.dp)) {
+                    Section("Last crash") {
+                        Hint("If the app closed by itself, this is why. A photo of this box is what is needed to fix it.")
+                        // Technical text, shown as it is.
+                        Text(
+                            crash.lineSequence().take(16).joinToString("\n"),
+                            style = MaterialTheme.typography.labelSmall, color = Color(0xFFD0D0D0),
+                        )
+                        ActionButton("Clear", null, false) { app.crashFile.delete(); cleared = true }
+                    }
+                }
+            }
+        }
+
+        item {
             Column(Modifier.widthIn(max = 900.dp)) {
                 TmdbAttribution(0.dp)
             }
