@@ -25,6 +25,8 @@ import android.view.ViewGroup
 import androidx.media3.datasource.HttpDataSource
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -197,6 +199,22 @@ class PlayerActivity : ComponentActivity() {
                 lp.rightMargin += side
                 v.layoutParams = lp
             }
+        }
+
+        // An "audio sync" button next to subtitles and settings.
+        runCatching {
+            val settings = playerView.findViewById<View>(androidx.media3.ui.R.id.exo_settings)
+            val group = settings.parent as ViewGroup
+            val button = ImageButton(this).apply {
+                setImageResource(R.drawable.ic_audio_sync)
+                background = settings.background?.constantState?.newDrawable()
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(settings.paddingLeft, settings.paddingTop, settings.paddingRight, settings.paddingBottom)
+                contentDescription = "Audio sync"
+                isFocusable = true
+                setOnClickListener { showAudioSync() }
+            }
+            group.addView(button, group.indexOfChild(settings), ViewGroup.LayoutParams(settings.layoutParams))
         }
 
         // Subtitles: our own text view, so they can sit on a soft rounded plate, centred.
@@ -616,6 +634,36 @@ class PlayerActivity : ComponentActivity() {
             }
             .setNegativeButton(tr("Cancel"), null)
             .show()
+    }
+
+    /** Small panel to move the sound against the picture, 25 ms at a time. */
+    private fun showAudioSync() {
+        fun label(): String {
+            val v = store.audioOffset.value
+            return when {
+                v == 0 -> "0 ms"
+                v > 0 -> tr("+$v ms  ·  sound later")
+                else -> tr("$v ms  ·  sound earlier")
+            }
+        }
+        val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(tr("Audio sync"))
+            .setMessage(label())
+            .setPositiveButton("+25 ms", null)
+            .setNegativeButton("−25 ms", null)
+            .setNeutralButton(tr("Reset"), null)
+            .show()
+        // Buttons normally close the panel; here they adjust and it stays open (Back closes it).
+        fun bind(which: Int, change: (Int) -> Int) {
+            dialog.getButton(which)?.setOnClickListener {
+                store.setAudioOffset(change(store.audioOffset.value))
+                dialog.setMessage(label())
+            }
+        }
+        bind(AlertDialog.BUTTON_POSITIVE) { it + UserStore.AUDIO_OFFSET_STEP }
+        bind(AlertDialog.BUTTON_NEGATIVE) { it - UserStore.AUDIO_OFFSET_STEP }
+        bind(AlertDialog.BUTTON_NEUTRAL) { 0 }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus()
     }
 
     private var centerHandled = false
