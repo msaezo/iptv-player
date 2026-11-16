@@ -375,6 +375,8 @@ fun SettingsScreen(wide: Boolean) {
             Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Sports agenda") {
                     val chosen by store.competitions.collectAsState()
+                    val agendaStatus by app.sports.status.collectAsState()
+                    LaunchedEffect(chosen) { app.sports.refreshIfStale() }
                     Hint("Home shows the next two days of these competitions. Selecting a fixture opens that sport's channels. The fixtures come from ESPN's public feed, which is free but unofficial, so it can stop working without notice.")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (c in SportsRepository.ALL) {
@@ -383,6 +385,7 @@ fun SettingsScreen(wide: Boolean) {
                             }
                         }
                     }
+                    if (agendaStatus.isNotBlank()) Hint(agendaStatus)
                 }
             }
         }

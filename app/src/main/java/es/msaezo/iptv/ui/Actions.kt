@@ -197,6 +197,7 @@ object Actions {
                     url = best.url, title = ch.name, subtitle = ch.pack,
                     userAgent = best.userAgent, referrer = best.referrer,
                     alternatives = ch.versions.mapIndexed { i, v -> Playback.Alt(ch.labels[i], v.url) },
+                    channelId = ch.id,
                 )
             },
             index, live = true,

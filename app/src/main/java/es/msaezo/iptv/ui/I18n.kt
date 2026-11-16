@@ -11,11 +11,28 @@ object I18n {
     /** "en" or "es". Screens that show text re-draw when it changes. */
     var lang by mutableStateOf("en")
 
+    // Every piece of text on screen passes through here, many times a second while
+    // scrolling, so each answer (including "no translation") is remembered.
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private var cachedFor = ""
+
     fun tr(text: String): String {
-        if (lang != "es") return text
+        val l = lang
+        if (l != "es") return text
+        if (cachedFor != l) { cache.clear(); cachedFor = l }
+        cache[text]?.let { return it }
+        val out = translate(text)
+        if (cache.size > 8000) cache.clear()
+        cache[text] = out
+        return out
+    }
+
+    private fun translate(text: String): String {
         val core = text.trim()
         if (core.isEmpty()) return text
-        val out = es[core] ?: patterns.firstNotNullOfOrNull { (r, f) -> r.matchEntire(core)?.let(f) } ?: return text
+        val out = es[core]
+            ?: patterns.firstNotNullOfOrNull { (r, f) -> r.matchEntire(core)?.let(f) }
+            ?: return text
         return if (core.length == text.length) out else text.replace(core, out)
     }
 
@@ -103,6 +120,12 @@ object I18n {
         },
         p("""The provider answered HTTP (\d+)\.""") { "El proveedor ha respondido HTTP ${it[1]}." },
         p("""(\d+) seconds""") { "${it[1]} segundos" },
+        p("""Add to (.+)""") { "Añadir a ${it[1]}" },
+        p("""Remove from (.+)""") { "Quitar de ${it[1]}" },
+        p("""Added to (.+)""") { "Añadido a ${it[1]}" },
+        p("""Removed from (.+)""") { "Quitado de ${it[1]}" },
+        p("""(\d+) fixtures found(.*)""") { "${it[1]} partidos encontrados${it[2]}" },
+        p("""Couldn't read the fixtures: (.*)""") { "No se pudieron leer los partidos: ${it[1]}" },
     )
 
     private val es: Map<String, String> = mapOf(
@@ -222,6 +245,12 @@ object I18n {
         "World Cup" to "Mundial", "Euro" to "Eurocopa",
         "Home shows the next two days of these competitions. Selecting a fixture opens that sport's channels. The fixtures come from ESPN's public feed, which is free but unofficial, so it can stop working without notice."
             to "En Inicio salen los próximos dos días de estas competiciones. Al elegir un partido se abren los canales de ese deporte. Los partidos vienen del feed público de ESPN, que es gratis pero no oficial, así que puede dejar de funcionar sin aviso.",
+        "No fixtures found yet." to "Todavía no se han encontrado partidos.",
+        "Checking fixtures…" to "Buscando partidos…",
+        // channel options
+        "Add to favourites" to "Añadir a favoritos", "Remove from favourites" to "Quitar de favoritos",
+        "New list…" to "Lista nueva…", "Name of the list" to "Nombre de la lista", "Create" to "Crear",
+        "Cancel" to "Cancelar", "Added to favourites" to "Añadido a favoritos", "Removed from favourites" to "Quitado de favoritos",
         // player
         "Can't play this stream" to "No se puede reproducir", "Open in other player" to "Abrir en otro reproductor",
         "Close" to "Cerrar", "Intro saved for this season" to "Intro guardada para esta temporada",

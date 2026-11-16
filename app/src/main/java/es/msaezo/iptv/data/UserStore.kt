@@ -107,6 +107,36 @@ class UserStore(context: Context) {
         _competitions.value = ids; prefs.edit().putStringSet("competitions", ids).apply()
     }
 
+    private val _channelLists = MutableStateFlow(loadChannelLists())
+    /** The user's own channel lists: name → channel ids, in the order they were created. */
+    val channelLists: StateFlow<Map<String, Set<String>>> = _channelLists.asStateFlow()
+
+    /** Adds the channel to [list] or takes it out; a list left empty disappears. Returns true if it is now in. */
+    fun toggleInList(list: String, channelId: String): Boolean {
+        val m = LinkedHashMap(_channelLists.value)
+        val set = m[list].orEmpty().toMutableSet()
+        val added = set.add(channelId)
+        if (!added) set.remove(channelId)
+        if (set.isEmpty()) m.remove(list) else m[list] = set
+        _channelLists.value = m
+        val json = JSONObject()
+        for ((k, v) in m) json.put(k, JSONArray(v.toList()))
+        prefs.edit().putString("channelLists", json.toString()).apply()
+        return added
+    }
+
+    private fun loadChannelLists(): Map<String, Set<String>> = try {
+        val o = JSONObject(prefs.getString("channelLists", "{}") ?: "{}")
+        val m = LinkedHashMap<String, Set<String>>()
+        for (k in o.keys()) {
+            val a = o.getJSONArray(k)
+            m[k] = (0 until a.length()).map { a.getString(it) }.toSet()
+        }
+        m
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
     private val introMarks = HashMap(loadMap("introMarks"))
     /** Where a season's intro starts and ends, in ms, as taught by the user. */
     fun introMark(key: String): Pair<Long, Long>? = introMarks[key]?.let { v ->

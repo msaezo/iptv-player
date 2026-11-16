@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import es.msaezo.iptv.IptvApp
 import es.msaezo.iptv.R
+import es.msaezo.iptv.data.Category
 import es.msaezo.iptv.data.LibraryView
 import es.msaezo.iptv.data.SportEvent
 import kotlinx.coroutines.withContext
@@ -219,6 +220,15 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
         sportEvents.sortedBy { e -> if (words.any { Library.normalize(e.title).contains(it) }) 0 else 1 }
     }
 
+    // Collections often overlap heavily (trending, popular, this year): show each title once.
+    val collectionRows = remember(collections) {
+        distinctRows(
+            collections.map { c -> Category<Any>(c.def.title, c.movies + c.shows) },
+            { if (it is Movie) "m" + it.id else "s" + (it as Show).id },
+            shown = 30,
+        )
+    }
+
     val pad = if (wide) 48.dp else 12.dp
     val landW = if (wide) 270.dp else 190.dp
     val portW = if (wide) 140.dp else 106.dp
@@ -295,9 +305,8 @@ fun HomeScreen(view: LibraryView, nav: Nav, wide: Boolean) {
             }
         }
 
-        items(collections, key = { it.def.key }) { c ->
-            val list: List<Any> = c.movies + c.shows
-            PosterRow(c.def.title, list.take(30), pad) { x ->
+        items(collectionRows, key = { "col:" + it.name }) { row ->
+            PosterRow(row.name, row.items.take(30), pad) { x ->
                 when (x) {
                     is Movie -> LandscapeCard(
                         x.title, known[x.id]?.backdropUrl ?: x.poster, known[x.id]?.vote ?: x.rating ?: 0.0, null, landW,

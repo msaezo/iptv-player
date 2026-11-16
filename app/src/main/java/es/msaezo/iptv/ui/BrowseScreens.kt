@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Explore
@@ -88,6 +89,22 @@ import es.msaezo.iptv.data.Tags
 
 private const val ROW_ITEMS = 24
 
+/**
+ * Stops rows from repeating each other: a title already shown near the start of an
+ * earlier row is left out of later ones, and a row with too little left is dropped.
+ */
+fun <T> distinctRows(rows: List<Category<T>>, id: (T) -> String, shown: Int = 24, min: Int = 5): List<Category<T>> {
+    val seen = HashSet<String>()
+    val out = ArrayList<Category<T>>()
+    for (row in rows) {
+        val fresh = row.items.filter { id(it) !in seen }
+        if (fresh.size < min) continue
+        out += Category(row.name, fresh)
+        for (x in fresh.take(shown)) seen += id(x)
+    }
+    return out
+}
+
 private fun <T> MutableList<Category<T>>.addRow(title: String, items: List<T>, min: Int = 3) {
     if (items.size >= min) add(Category(title, items))
 }
@@ -110,7 +127,7 @@ fun smartMovieRows(view: LibraryView, collections: List<ResolvedCollection>): Li
     for (k in listOf("m_oscars", "m_netflix", "m_prime", "m_disney", "m_max", "m_movistar", "m_apple")) {
         cols[k]?.let { rows.addRow(it.def.title, it.movies) }
     }
-    return rows
+    return distinctRows(rows, { it.id })
 }
 
 fun smartShowRows(view: LibraryView, collections: List<ResolvedCollection>): List<Category<Show>> {
@@ -128,7 +145,7 @@ fun smartShowRows(view: LibraryView, collections: List<ResolvedCollection>): Lis
     for (k in listOf("t_netflix", "t_prime", "t_disney", "t_max", "t_movistar", "t_apple")) {
         cols[k]?.let { rows.addRow(it.def.title, it.shows) }
     }
-    return rows
+    return distinctRows(rows, { it.id })
 }
 
 @Composable
@@ -279,10 +296,15 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     if (guide == null) {
         CenterMessage("Organising channels…", loading = true); return
     }
-    val sections = remember(guide, favorites, recent) {
+    val ownLists by store.channelLists.collectAsState()
+    val sections = remember(guide, favorites, recent, ownLists) {
         val extra = ArrayList<LiveSection>()
         val favs = guide.channels.filter { isFavorite(it, favorites) }
         if (favs.isNotEmpty()) extra += LiveSection("★ Favorites", listOf(Category(LiveGuide.ALL, favs)))
+        for ((name, ids) in ownLists) {
+            val mine = ids.mapNotNull { guide.channelById(it) }
+            if (mine.isNotEmpty()) extra += LiveSection(name, listOf(Category(LiveGuide.ALL, mine)))
+        }
         val rec = recent.mapNotNull { guide.channelOf(it) }.distinct()
         if (rec.isNotEmpty()) extra += LiveSection("Recently watched", listOf(Category(LiveGuide.ALL, rec)))
         extra + guide.sections
@@ -308,7 +330,7 @@ fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val scope = rememberCoroutineScope()
     CategoryLayout(menu, nav.liveCategory, {
         nav.liveCategory = it; nav.liveFilter = 0; scope.launch { nav.liveList.scrollToItem(0) }
-    }, wide, icon = ::liveIcon, badge = ::liveBadge) { cat ->
+    }, wide, icon = { liveIconOr(it, ownLists.keys) }, badge = ::liveBadge) { cat ->
         val section = sections.firstOrNull { it.name == cat.name } ?: return@CategoryLayout
         val chosen = section.filters[nav.liveFilter.coerceIn(0, section.filters.size - 1)]
         // Channels with something to show (a programme guide, or an announced event) come first.
@@ -370,6 +392,10 @@ fun liveIcon(name: String): ImageVector? = when (name) {
     "Adults" -> Icons.Filled.Lock
     else -> null
 }
+
+/** Sections that are the user's own lists get a generic list icon. */
+fun liveIconOr(name: String, own: Set<String>): ImageVector? =
+    liveIcon(name) ?: if (name in own) Icons.Filled.PlaylistPlay else null
 
 /** Countries get a two-letter mark instead of an icon. */
 fun liveBadge(name: String): String? = when (name) {

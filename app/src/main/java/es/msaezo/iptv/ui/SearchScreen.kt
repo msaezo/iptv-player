@@ -54,7 +54,7 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = pad, vertical = 8.dp),
+        contentPadding = PaddingValues(start = pad, end = pad, top = if (wide) 40.dp else 12.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {

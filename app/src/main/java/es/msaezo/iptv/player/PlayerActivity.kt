@@ -24,6 +24,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.media3.datasource.HttpDataSource
 import android.view.WindowManager
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -72,6 +73,8 @@ object Playback {
         val memoryKey: String? = null,
         /** Episodes: series + season, under which the intro's position is remembered. */
         val introKey: String? = null,
+        /** Live TV: the channel's id, for favourites and the user's own lists. */
+        val channelId: String? = null,
     )
 
     data class Alt(val label: String, val url: String)
@@ -531,7 +534,7 @@ class PlayerActivity : ComponentActivity() {
 
     /** ☰ on the remote: next episode, skip the intro, or teach where the intro is. */
     private fun onMenuKey(): Boolean {
-        if (live) return false
+        if (live) return showChannelOptions()
         val item = currentItem() ?: return false
         val pos = player.currentPosition
         when (hint) {
@@ -556,6 +559,63 @@ class PlayerActivity : ComponentActivity() {
         }
         updateHint()
         return true
+    }
+
+    // --- live TV: ☰ opens options for the channel on screen -----------------------------
+
+    private fun showChannelOptions(): Boolean {
+        val item = currentItem() ?: return false
+        val id = item.channelId ?: return false
+        val favKey = "l:$id"
+        val isFav = store.isFavorite(favKey)
+        val lists = store.channelLists.value
+        val labels = ArrayList<String>()
+        val actions = ArrayList<() -> Unit>()
+        labels += tr(if (isFav) "Remove from favourites" else "Add to favourites")
+        actions += {
+            store.toggleFavorite(favKey)
+            showOverlay(if (isFav) "Removed from favourites" else "Added to favourites")
+        }
+        for ((name, ids) in lists) {
+            val inList = id in ids
+            labels += tr(if (inList) "Remove from $name" else "Add to $name")
+            actions += {
+                store.toggleInList(name, id)
+                showOverlay(if (inList) "Removed from $name" else "Added to $name")
+            }
+        }
+        labels += tr("New list…")
+        actions += { askNewList(id) }
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(item.title)
+            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
+            .show()
+        return true
+    }
+
+    private fun askNewList(channelId: String) {
+        val input = EditText(this).apply {
+            hint = tr("Name of the list")
+            setSingleLine()
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY)
+        }
+        val box = FrameLayout(this).apply {
+            setPadding(dp(24), dp(8), dp(24), 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(tr("New list…"))
+            .setView(box)
+            .setPositiveButton(tr("Create")) { _, _ ->
+                val name = input.text.toString().trim().take(30)
+                if (name.isNotEmpty()) {
+                    if (channelId !in store.channelLists.value[name].orEmpty()) store.toggleInList(name, channelId)
+                    showOverlay("Added to $name")
+                }
+            }
+            .setNegativeButton(tr("Cancel"), null)
+            .show()
     }
 
     private var centerHandled = false
@@ -605,7 +665,7 @@ class PlayerActivity : ComponentActivity() {
         }
         if (event.keyCode == KeyEvent.KEYCODE_MENU) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && onMenuKey()) return true
-            if (event.action == KeyEvent.ACTION_UP && !live) return true
+            if (event.action == KeyEvent.ACTION_UP) return true
         }
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK &&
             playerView.isControllerFullyVisible

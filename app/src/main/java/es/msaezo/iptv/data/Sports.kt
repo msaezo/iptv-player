@@ -36,6 +36,10 @@ class SportsRepository(private val store: UserStore, private val scope: Coroutin
     private val _events = MutableStateFlow<List<SportEvent>>(emptyList())
     val events: StateFlow<List<SportEvent>> = _events.asStateFlow()
 
+    private val _status = MutableStateFlow("")
+    /** What the last check found, per competition, or why it failed. Shown in Settings. */
+    val status: StateFlow<String> = _status.asStateFlow()
+
     @Volatile private var fetchedAt = 0L
     @Volatile private var fetchedFor: Set<String> = emptySet()
     @Volatile private var busy = false
@@ -49,18 +53,31 @@ class SportsRepository(private val store: UserStore, private val scope: Coroutin
             try {
                 val now = System.currentTimeMillis()
                 val day = SimpleDateFormat("yyyyMMdd", Locale.ROOT)
-                val range = day.format(Date(now)) + "-" + day.format(Date(now + 2 * 86_400_000L))
+                val range = day.format(Date(now)) + "-" + day.format(Date(now + 4 * 86_400_000L))
                 val out = ArrayList<SportEvent>()
+                val counts = ArrayList<String>()
+                var firstError: String? = null
+                _status.value = "Checking fixtures…"
                 for (c in ALL.filter { it.id in wanted }) {
                     try {
-                        val text = Http.getText("https://site.api.espn.com/apis/site/v2/sports/${c.path}/scoreboard?dates=$range", "TUTV")
-                        out += parse(c, JSONObject(text), now)
+                        val text = Http.getText("https://site.api.espn.com/apis/site/v2/sports/${c.path}/scoreboard?dates=$range", UA)
+                        val found = parse(c, JSONObject(text), now)
+                        out += found
+                        counts += "${c.name} ${found.size}"
                     } catch (e: Exception) {
                         // One competition failing must not hide the others.
+                        counts += "${c.name} ✕"
+                        if (firstError == null) firstError = "${c.name}: ${e.message ?: e.javaClass.simpleName}"
                     }
                 }
                 _events.value = out.sortedWith(compareBy({ !it.live }, { it.start })).take(60)
-                fetchedAt = now
+                _status.value = when {
+                    out.isEmpty() && firstError != null -> "Couldn't read the fixtures: $firstError"
+                    out.isEmpty() -> "No fixtures found yet."
+                    else -> "${out.size} fixtures found  ·  " + counts.joinToString("  ·  ")
+                }
+                // After a failure, try again soon instead of waiting the full interval.
+                fetchedAt = if (out.isEmpty() && firstError != null) now - REFRESH_MS + 60_000L else now
                 fetchedFor = wanted
             } finally {
                 busy = false
@@ -70,6 +87,7 @@ class SportsRepository(private val store: UserStore, private val scope: Coroutin
 
     companion object {
         private const val REFRESH_MS = 20 * 60_000L
+        private const val UA = "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
         val ALL = listOf(
             Competition("laliga", "LaLiga", "Football", "soccer/esp.1"),
