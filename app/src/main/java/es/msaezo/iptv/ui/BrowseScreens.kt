@@ -273,11 +273,15 @@ private fun toggleFavorite(ch: LiveChannel, favorites: Set<String>) {
 
 @Composable
 fun rememberLiveGuide(view: LibraryView): LiveGuide? {
-    val guide by produceState<LiveGuide?>(null, view) {
-        value = withContext(Dispatchers.Default) { view.liveGuide }
+    // Start from the last organised list, so coming back to Live TV (from a channel, or after
+    // Android rebuilt the screen) shows the channels at once instead of organising them again.
+    val guide by produceState(lastGuide, view) {
+        value = withContext(Dispatchers.Default) { view.liveGuide }.also { lastGuide = it }
     }
     return guide
 }
+
+@Volatile private var lastGuide: LiveGuide? = null
 
 @Composable
 fun LiveScreen(view: LibraryView, nav: Nav, wide: Boolean) {

@@ -188,6 +188,9 @@ class PlayerActivity : ComponentActivity() {
             setShowSubtitleButton(true)
             controllerShowTimeoutMs = 4000
             if (live) {
+                // A channel opens straight to the picture; the controls only appear when asked for.
+                controllerAutoShow = false
+                hideController()
                 setShowFastForwardButton(false)
                 setShowRewindButton(false)
             }
