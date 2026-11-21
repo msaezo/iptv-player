@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -158,7 +157,7 @@ fun SettingsScreen(wide: Boolean) {
         item {
             Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Playlist (M3U)") {
-                    OutlinedTextField(
+                    TvTextField(
                         value = url, onValueChange = { url = it },
                         label = { Text(tr("M3U URL")) },
                         placeholder = { Text(tr("http://provider.com/get.php?username=…&type=m3u_plus")) },
@@ -228,12 +227,12 @@ fun SettingsScreen(wide: Boolean) {
             Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Collections & ratings") {
                     Hint("TMDB (free): themoviedb.org → Settings → API → request a key. Paste the API key or the read access token.")
-                    OutlinedTextField(
+                    TvTextField(
                         value = tmdb, onValueChange = { tmdb = it }, label = { Text(tr("TMDB API key")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     Hint("OMDb (free, 1000/day): omdbapi.com/apikey.aspx — adds Rotten Tomatoes, IMDb and Metacritic scores.")
-                    OutlinedTextField(
+                    TvTextField(
                         value = omdb, onValueChange = { omdb = it }, label = { Text(tr("OMDb API key")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
@@ -281,8 +280,16 @@ fun SettingsScreen(wide: Boolean) {
                         }
                     }
                     Hint("Loads this much ahead before a channel starts, so a busy server (a big match) is less likely to make it stop. The channel takes that long to appear and you watch that far behind live.")
+                    val vodBuffer by store.vodBuffer.collectAsState()
+                    Text(tr("Films & series buffer"), fontWeight = FontWeight.Bold)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for ((sec, label) in listOf(0 to "Standard (50 s)", 120 to "2 minutes", 300 to "5 minutes")) {
+                            Pill(label, vodBuffer == sec) { store.setVodBuffer(sec) }
+                        }
+                    }
+                    Hint("How much of what comes next is loaded while you watch. More rides out a slow connection, but uses more memory; the size is capped, so in 4K it holds less than this. Applies from the next title you open.")
                     Hint("Some providers only accept certain players. Change the user agent if streams refuse to play.")
-                    OutlinedTextField(
+                    TvTextField(
                         value = ua, onValueChange = { ua = it }, label = { Text(tr("User agent")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
@@ -357,7 +364,7 @@ fun SettingsScreen(wide: Boolean) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (f in follow) Pill("$f  ×", false) { store.setFollow(follow - f) }
                     }
-                    OutlinedTextField(
+                    TvTextField(
                         value = name, onValueChange = { name = it }, label = { Text(tr("Team or player")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
@@ -398,11 +405,11 @@ fun SettingsScreen(wide: Boolean) {
                         ActionButton("Stop sharing", null, false) { Transfer.stop(); sharing = null }
                     }
                     Text(tr("2 · On the new device"), fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
+                    TvTextField(
                         value = address, onValueChange = { address = it }, label = { Text(tr("Address shown on the other device")) },
                         placeholder = { Text("192.168.1.34") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedTextField(
+                    TvTextField(
                         value = code, onValueChange = { code = it }, label = { Text(tr("Code")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )

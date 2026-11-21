@@ -248,6 +248,10 @@ object I18n {
         "No fixtures found yet." to "Todavía no se han encontrado partidos.",
         "Checking fixtures…" to "Buscando partidos…",
         // channel options
+        "Films & series buffer" to "Búfer de películas y series", "Standard (50 s)" to "Estándar (50 s)",
+        "2 minutes" to "2 minutos", "5 minutes" to "5 minutos",
+        "How much of what comes next is loaded while you watch. More rides out a slow connection, but uses more memory; the size is capped, so in 4K it holds less than this. Applies from the next title you open." to "Cuánto de lo que viene después se carga mientras ves. Más aguanta mejor una conexión lenta, pero usa más memoria; el tamaño tiene un tope, así que en 4K guarda menos que esto. Se aplica desde el siguiente título que abras.",
+        "Press OK on the keyboard (or Back) to finish." to "Pulsa OK en el teclado (o Atrás) para terminar.",
         "Watch later" to "Ver más tarde", "In Watch later" to "En Ver más tarde",
         "Remove from Watch later" to "Quitar de Ver más tarde",
         "Remove from Continue watching" to "Quitar de Seguir viendo",

@@ -7,6 +7,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -43,7 +49,12 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
     val guide = rememberLiveGuide(view)
     var results by remember { mutableStateOf<LibraryView.SearchResults?>(null) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(200); runCatching { focus.requestFocus() } }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    // Start in the box only when there is nothing searched yet; coming back from a result
+    // the focus returns to the card instead of opening the keyboard again.
+    LaunchedEffect(Unit) { if (nav.searchQuery.isBlank()) { delay(200); runCatching { focus.requestFocus() } } }
     LaunchedEffect(nav.searchQuery, view) {
         delay(250)
         val q = nav.searchQuery
@@ -66,6 +77,16 @@ fun SearchScreen(view: LibraryView, nav: Nav, wide: Boolean) {
                 placeholder = { Text(tr("Search channels, movies, shows…")) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                // Search: close the keyboard and go straight to the results.
+                keyboardActions = KeyboardActions(onSearch = {
+                    keyboard?.hide()
+                    val q = nav.searchQuery
+                    if (q.trim().length >= 2) scope.launch {
+                        results = withContext(Dispatchers.Default) { view.search(q) }
+                        delay(100)
+                        runCatching { focusManager.moveFocus(FocusDirection.Down) }
+                    }
+                }),
             )
         }
         val r = results

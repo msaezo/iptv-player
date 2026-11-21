@@ -158,8 +158,17 @@ class PlayerActivity : ComponentActivity() {
         // Live TV can be asked to load some seconds ahead before it starts, which rides out
         // a busy server at the price of a slower start and a picture that far behind live.
         val ahead = if (live) store.liveBuffer.value * 1000 else 0
+        // Films and episodes can keep more of what comes next in memory, so a slow patch of the
+        // connection is ridden out; capped by size so a 4K film cannot use up the memory.
+        val vodAhead = if (live) 0 else store.vodBuffer.value * 1000
         val loadControl = DefaultLoadControl.Builder().apply {
             if (ahead > 0) setBufferDurationsMs(maxOf(60_000, ahead * 2), maxOf(90_000, ahead * 3), ahead, ahead)
+            if (vodAhead > 0) {
+                val cap = (Runtime.getRuntime().maxMemory() / 3).coerceAtMost(200L * 1024 * 1024).toInt()
+                setBufferDurationsMs(vodAhead, vodAhead, 2_500, 5_000)
+                setTargetBufferBytes(cap)
+                setPrioritizeTimeOverSizeThresholds(false)
+            }
         }.build()
 
         player = ExoPlayer.Builder(this, renderers)

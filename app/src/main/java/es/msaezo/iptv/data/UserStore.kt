@@ -61,6 +61,13 @@ class UserStore(context: Context) {
         _liveBuffer.value = sec; prefs.edit().putInt("liveBufferSec", sec).apply()
     }
 
+    private val _vodBuffer = MutableStateFlow(prefs.getInt("vodBufferSec", 0))
+    /** Seconds of a film or episode to load ahead while it plays (0 = the player's standard 50 s). */
+    val vodBuffer: StateFlow<Int> = _vodBuffer.asStateFlow()
+    fun setVodBuffer(sec: Int) {
+        _vodBuffer.value = sec; prefs.edit().putInt("vodBufferSec", sec).apply()
+    }
+
     data class SubtitleStyle(
         val serif: Boolean = true,
         /** Percent of the standard size. */
