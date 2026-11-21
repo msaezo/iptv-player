@@ -142,7 +142,9 @@ fun MainScreen() {
 }
 
 private const val TV_SCALE = 0.82f
-private val RAIL_WIDTH = 60.dp
+/** Room left of the menu icons, so TVs that crop the edge of the picture don't cut them. */
+private val RAIL_INSET = 28.dp
+private val RAIL_WIDTH = 60.dp + RAIL_INSET
 
 /** TV side menu: a slim column of icons, no labels. */
 @Composable
@@ -157,7 +159,7 @@ private fun SideRail(nav: Nav, focusOnStart: Boolean) {
         }
     }
     Column(
-        Modifier.fillMaxHeight().width(RAIL_WIDTH).background(Color(0xFF050505)).padding(vertical = 20.dp),
+        Modifier.fillMaxHeight().width(RAIL_WIDTH).background(Color(0xFF050505)).padding(start = RAIL_INSET, top = 20.dp, bottom = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
