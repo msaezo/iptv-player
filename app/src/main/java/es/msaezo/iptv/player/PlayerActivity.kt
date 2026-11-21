@@ -1,6 +1,7 @@
 package es.msaezo.iptv.player
 
 import android.app.AlertDialog
+import kotlinx.coroutines.launch
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -756,6 +757,8 @@ class PlayerActivity : ComponentActivity() {
         if (::player.isInitialized) {
             saveProgress()
             player.playWhenReady = false
+            // Hand the new position to the other devices.
+            if (!live) IptvApp.instance.let { a -> a.scope.launch { a.sync.sync() } }
         }
     }
 

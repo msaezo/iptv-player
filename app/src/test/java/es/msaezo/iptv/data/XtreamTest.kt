@@ -44,3 +44,17 @@ class XtreamTest {
         assertEquals(true, lib.shows[0].needsLoading)
     }
 }
+
+class SyncPathTest {
+    @org.junit.Test
+    fun pathDropsTheAccountAndComesBack() {
+        val acc = XtreamAccount("http://egg-d5.xyz:80", "user1", "pass1")
+        val url = acc.movieUrl("12345", "mkv")
+        val path = ProgressSync.pathOf(url)
+        org.junit.Assert.assertEquals("movie/12345.mkv", path)
+        org.junit.Assert.assertFalse(path!!.contains("user1") || path.contains("pass1"))
+        org.junit.Assert.assertEquals(url, ProgressSync.urlOf(acc, path))
+        org.junit.Assert.assertEquals("series/9.mp4", ProgressSync.pathOf(acc.episodeUrl("9", null)))
+        org.junit.Assert.assertNull(ProgressSync.pathOf(acc.liveUrl("7")))
+    }
+}

@@ -1,5 +1,7 @@
 package es.msaezo.iptv
 
+import kotlinx.coroutines.launch
+
 import android.app.Application
 import coil.Coil
 import coil.ImageLoader
@@ -20,6 +22,8 @@ class IptvApp : Application() {
     lateinit var playlists: PlaylistRepository
         private set
     lateinit var meta: MetaRepository
+        private set
+    lateinit var sync: es.msaezo.iptv.data.ProgressSync
         private set
     lateinit var net: NetInfo
         private set
@@ -49,8 +53,13 @@ class IptvApp : Application() {
         }
         var started = 0
         registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
-            override fun onActivityStarted(a: android.app.Activity) { if (started++ == 0) mark(lastNote) }
-            override fun onActivityStopped(a: android.app.Activity) { if (--started == 0) runCatching { sessionFile.writeText("background") } }
+            override fun onActivityStarted(a: android.app.Activity) {
+                // Coming to the front: pick up what was watched on another device.
+                if (started++ == 0) { mark(lastNote); scope.launch { sync.sync() } }
+            }
+            override fun onActivityStopped(a: android.app.Activity) {
+                if (--started == 0) { runCatching { sessionFile.writeText("background") }; scope.launch { sync.sync() } }
+            }
             override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
             override fun onActivityResumed(a: android.app.Activity) {}
             override fun onActivityPaused(a: android.app.Activity) {}
@@ -68,6 +77,7 @@ class IptvApp : Application() {
         es.msaezo.iptv.ui.I18n.lang = store.language.value
         playlists = PlaylistRepository(this, store, scope)
         meta = MetaRepository(this, store, playlists, scope)
+        sync = es.msaezo.iptv.data.ProgressSync(store, playlists)
         net = NetInfo(scope).also { it.refresh() }
         epg = EpgRepository(playlists, store, scope)
     }

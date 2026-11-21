@@ -276,14 +276,53 @@ class UserStore(context: Context) {
         prefs.edit().putString("progress", json.toString()).apply()
     }
 
-    /** Forgets how far these streams were watched, which takes the title out of Continue watching. */
+    /**
+     * Forgets how far these streams were watched, which takes the title out of Continue watching.
+     * The position goes back to 0 rather than the entry disappearing, so other devices learn it too.
+     */
     fun clearProgress(urls: Collection<String>) {
         val m = _progress.value.toMutableMap()
-        if (!m.keys.removeAll(urls.toSet())) return
+        val now = System.currentTimeMillis()
+        for (u in urls) m[u]?.let { m[u] = Progress(0, it.duration, now) }
+        saveAll(m)
+    }
+
+    /** Takes in positions from another device; for each stream the newest one wins. */
+    fun mergeProgress(remote: Map<String, Progress>, shows: Map<String, String>) {
+        val m = _progress.value.toMutableMap()
+        var changed = false
+        for ((u, p) in remote) {
+            val mine = m[u]
+            if (mine == null || p.updatedAt > mine.updatedAt) { m[u] = p; changed = true }
+        }
+        if (changed) saveAll(m)
+        val missing = shows.filterKeys { it !in _episodeShow.value }
+        if (missing.isNotEmpty()) {
+            val e = LinkedHashMap(_episodeShow.value); e.putAll(missing)
+            while (e.size > 4000) e.remove(e.keys.first())
+            _episodeShow.value = e
+            prefs.edit().putString("episodeShow", JSONObject(e as Map<*, *>).toString()).apply()
+        }
+    }
+
+    private fun saveAll(m: Map<String, Progress>) {
         _progress.value = m
         val json = JSONObject()
         for ((k, p) in m) json.put(k, JSONArray().put(p.position).put(p.duration).put(p.updatedAt))
         prefs.edit().putString("progress", json.toString()).apply()
+    }
+
+    private val _syncToken = MutableStateFlow(prefs.getString("syncToken", "") ?: "")
+    /** The user's own GitHub token (gist permission) for keeping progress in step; empty = off. */
+    val syncToken: StateFlow<String> = _syncToken.asStateFlow()
+    fun setSyncToken(t: String) {
+        if (t.trim() != _syncToken.value) setSyncGistId("")
+        _syncToken.value = t.trim(); prefs.edit().putString("syncToken", t.trim()).apply()
+    }
+    private val _syncGistId = MutableStateFlow(prefs.getString("syncGistId", "") ?: "")
+    val syncGistId: StateFlow<String> = _syncGistId.asStateFlow()
+    fun setSyncGistId(id: String) {
+        _syncGistId.value = id; prefs.edit().putString("syncGistId", id).apply()
     }
 
     private val _watchLater = MutableStateFlow(loadList("watchLater"))
@@ -298,9 +337,11 @@ class UserStore(context: Context) {
     }
 
     fun clearHistory() {
-        _progress.value = emptyMap()
+        // Positions to 0 rather than gone, so the other devices are cleared at the next sync too.
+        val now = System.currentTimeMillis()
+        saveAll(_progress.value.mapValues { (_, p) -> Progress(0, p.duration, now) })
         _recentLive.value = emptyList()
-        prefs.edit().remove("progress").remove("recentLive").apply()
+        prefs.edit().remove("recentLive").apply()
     }
 
     private fun loadProgress(): Map<String, Progress> {

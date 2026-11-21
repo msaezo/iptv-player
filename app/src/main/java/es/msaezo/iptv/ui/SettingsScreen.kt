@@ -379,6 +379,24 @@ fun SettingsScreen(wide: Boolean) {
 
         item {
             Column(Modifier.widthIn(max = 900.dp)) {
+                Section("Sync progress") {
+                    val savedToken by store.syncToken.collectAsState()
+                    val syncStatus by app.sync.status.collectAsState()
+                    var token by remember(savedToken) { mutableStateOf(savedToken) }
+                    val scope = rememberCoroutineScope()
+                    Hint("Keeps where you stopped a film or episode the same on all your devices, through a private gist in your own GitHub account. Create a token at github.com/settings/tokens (classic) with only the \"gist\" permission and paste it here, then copy it to your other devices with Other devices below. Without a token nothing is synced. Only the film number on your provider is stored, never your username or password.")
+                    TvTextField(value = token, onValueChange = { token = it }, label = { Text(tr("GitHub token")) }, modifier = Modifier.fillMaxWidth())
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ActionButton("Save & sync", null, true) { store.setSyncToken(token); scope.launch { app.sync.sync() } }
+                        if (savedToken.isNotBlank()) ActionButton("Turn off", null, false) { store.setSyncToken(""); token = "" }
+                    }
+                    if (syncStatus.isNotBlank()) Hint(syncStatus)
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.widthIn(max = 900.dp)) {
                 Section("Other devices") {
                     var sharing by remember { mutableStateOf<String?>(null) }
                     var address by remember { mutableStateOf("") }
